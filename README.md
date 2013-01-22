@@ -1,4 +1,4 @@
-qdb-kbstore
+qdb-kvstore
 ===========
 
 Clustered in memory key/value store for objects. Guarantee's that all nodes in the cluster will see the same data.
