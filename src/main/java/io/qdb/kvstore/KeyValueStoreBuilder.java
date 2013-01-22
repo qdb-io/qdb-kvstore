@@ -32,6 +32,11 @@ public class KeyValueStoreBuilder<K, V> {
         return this;
     }
 
+    public KeyValueStoreBuilder dir(String dir) {
+        this.dir = new File(dir);
+        return this;
+    }
+
     public KeyValueStoreBuilder serializer(KeyValueStore.Serializer serializer) {
         this.serializer = serializer;
         return this;
@@ -64,5 +69,6 @@ public class KeyValueStoreBuilder<K, V> {
 
     public static class NullVersionProvider<V> implements KeyValueStore.VersionProvider<V> {
         public int getVersion(V value) { return 0; }
+        public void incVersion(V value) { }
     }
 }

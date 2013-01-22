@@ -308,17 +308,22 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                 }
                 if (tx.op == StoreTx.Operation.PUT || existing != null) {
                     if (m == null) maps.put(tx.namespace, m = new ConcurrentHashMap<K, V>());
+                    versionProvider.incVersion(tx.value);
                     m.put(tx.key, tx.value);
                 }
                 return existing;
 
             case REPLACE_KVV:
                 if (m == null) return Boolean.FALSE;
-                return m.replace(tx.key, tx.oldValue, tx.value);
+                boolean replace = m.replace(tx.key, tx.oldValue, tx.value);
+                if (replace) versionProvider.incVersion(tx.value);
+                return replace;
 
             case PUT_IF_ABSENT:
                 if (m == null) maps.put(tx.namespace, m = new ConcurrentHashMap<K, V>());
-                return m.putIfAbsent(tx.key, tx.value);
+                V v = m.putIfAbsent(tx.key, tx.value);
+                if (v == null) versionProvider.incVersion(tx.value);
+                return v;
 
             case REMOVE:
                 if (m == null) return null;
