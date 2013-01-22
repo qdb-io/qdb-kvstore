@@ -31,6 +31,6 @@ public class ModelObject {
 
     @Override
     public String toString() {
-        return name + ":" + version;
+        return name + " v" + version;
     }
 }

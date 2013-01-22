@@ -294,18 +294,12 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
      */
     private synchronized Object apply(StoreTx<K, V> tx) {
         ConcurrentMap<K, V> m = maps.get(tx.namespace);
+        V existing;
         switch (tx.op) {
             case PUT:
             case REPLACE:
-                V existing = m != null ? m.get(tx.key) : null;
-                if (existing != null) {
-                    Object v1 = versionProvider.getVersion(existing);
-                    Object v2 = versionProvider.getVersion(tx.value);
-                    if (v1 != null && !v1.equals(v2)) {
-                        throw new OptimisticLockingException("Existing value for " + tx.namespace + "." + tx.key + " " +
-                                "has version " + v1 + ", new value has version " + v2 + ": " + tx.value);
-                    }
-                }
+                existing = m != null ? m.get(tx.key) : null;
+                if (existing != null) checkVersionNumbers(tx, existing);
                 if (tx.op == StoreTx.Operation.PUT || existing != null) {
                     if (m == null) maps.put(tx.namespace, m = new ConcurrentHashMap<K, V>());
                     versionProvider.incVersion(tx.value);
@@ -333,11 +327,23 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
 
             case REMOVE_KV:
                 if (m == null) return Boolean.FALSE;
+                existing = m.get(tx.key);
+                if (existing == null) return Boolean.FALSE;
+                checkVersionNumbers(tx, existing);
                 Boolean bool = m.remove(tx.key, tx.value);
                 if (m.isEmpty()) maps.remove(tx.namespace);
                 return bool;
         }
         throw new KeyValueStoreException("Unhandled operation: " + tx);
+    }
+
+    private void checkVersionNumbers(StoreTx<K, V> tx, V existing) {
+        Object v1 = versionProvider.getVersion(existing);
+        Object v2 = versionProvider.getVersion(tx.value);
+        if (v1 != null && !v1.equals(v2)) {
+            throw new OptimisticLockingException("Existing value for " + tx.namespace + "." + tx.key + " " +
+                    "has version " + v1 + ", value has version " + v2 + ": " + tx.value);
+        }
     }
 
     @Override
@@ -383,7 +389,10 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         }
 
         public void clear() {
-            for (String id : maps.keySet()) remove(id);
+            ConcurrentMap<K, V> m = maps.get(namespace);
+            if (m == null) return;
+            List<K> list = new ArrayList<K>(m.keySet());
+            for (K id : list) remove(id);
         }
 
         public int size() {
@@ -413,17 +422,17 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
 
         public Set<K> keySet() {
             ConcurrentMap<K, V> m = maps.get(namespace);
-            return m == null ? null : m.keySet();
+            return m == null ? Collections.EMPTY_SET : m.keySet();
         }
 
         public Collection<V> values() {
             ConcurrentMap<K, V> m = maps.get(namespace);
-            return m == null ? null : m.values();
+            return m == null ? Collections.EMPTY_LIST : m.values();
         }
 
         public Set<Entry<K, V>> entrySet() {
             ConcurrentMap<K, V> m = maps.get(namespace);
-            return m == null ? null : m.entrySet();
+            return m == null ? Collections.EMPTY_SET : m.entrySet();
         }
     }
 
