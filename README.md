@@ -1,5 +1,5 @@
-qdb-store
-=========
+qdb-kbstore
+===========
 
 Clustered in memory key/value store for objects. Guarantee's that all nodes in the cluster will see the same data.
 Writes the database to disk periodically in snapshot files. Uses a MessageBuffer as a tx log for replay from the
