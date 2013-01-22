@@ -6,7 +6,7 @@ package io.qdb.kvstore;
 public class VersionProvider implements KeyValueStore.VersionProvider<ModelObject> {
 
     @Override
-    public int getVersion(ModelObject value) {
+    public Object getVersion(ModelObject value) {
         return value.version;
     }
 

@@ -62,8 +62,8 @@ public interface KeyValueStore<K, V> extends Closeable {
 
     /** Extracts version numbers from objects for optimistic locking. */
     interface VersionProvider<V> {
-        /** Get the version of value or 0 if it does not have a version. */
-        public int getVersion(V value);
+        /** Get the version of value or null if it does not have a version. */
+        public Object getVersion(V value);
         /** Bump up the version number of value. NOP if not using versioning. */
         public void incVersion(V value);
     }

@@ -299,9 +299,9 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
             case REPLACE:
                 V existing = m != null ? m.get(tx.key) : null;
                 if (existing != null) {
-                    int v1 = versionProvider.getVersion(existing);
-                    int v2 = versionProvider.getVersion(tx.value);
-                    if (v1 != v2) {
+                    Object v1 = versionProvider.getVersion(existing);
+                    Object v2 = versionProvider.getVersion(tx.value);
+                    if (v1 != null && !v1.equals(v2)) {
                         throw new OptimisticLockingException("Existing value for " + tx.namespace + "." + tx.key + " " +
                                 "has version " + v1 + ", new value has version " + v2 + ": " + tx.value);
                     }
