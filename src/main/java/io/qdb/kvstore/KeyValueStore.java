@@ -1,4 +1,4 @@
-package io.qdb.store;
+package io.qdb.kvstore;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -17,10 +17,11 @@ public interface KeyValueStore<K, V> extends Closeable {
      * Get a namespace for storing objects. It is only actually created when the first object is stored.
      * All methods in the map might throw {@link KeyValueStoreException}.
      */
-    public ConcurrentMap<K, V> namespace(String namespace);
+    public ConcurrentMap<K, V> getMap(String namespace);
 
     /**
-     * Create a snapshot of our data.
+     * Create a snapshot of our data. This is useful for transferring our state to another KeyValueStore (maybe
+     * on a different machine).
      */
     public void createSnapshot(OutputStream out) throws IOException;
 
@@ -31,8 +32,14 @@ public interface KeyValueStore<K, V> extends Closeable {
     public void loadSnapshot(InputStream in) throws IOException;
 
     /**
-     * Does this store contain no objects or namespaces?
+     * Save a snapshot. This is a NOP if we are already busy saving a snapshot or if no new transactions have been
+     * applied since the most recent snapshot was saved.
      */
+    public void saveSnapshot() throws IOException;
+
+    /**
+    * Does this store contain no objects?
+    */
     public boolean isEmpty();
 
     /**
@@ -46,7 +53,7 @@ public interface KeyValueStore<K, V> extends Closeable {
 
     /**
      * Responsible for converting objects to/from streams. Note that this must be able to serialize
-     * {@link Snapshot} and {@link StoreTx} instances.
+     * {@link Snapshot} and {@link StoreTx} instances as well as K and V instances.
      */
     interface Serializer {
         public void serialize(Object value, OutputStream out) throws IOException;

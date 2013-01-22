@@ -1,4 +1,4 @@
-package io.qdb.store;
+package io.qdb.kvstore;
 
 import com.google.common.io.PatternFilenameFilter;
 import com.sun.tools.internal.ws.processor.model.ModelException;
@@ -25,7 +25,6 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     private final Serializer serializer;
     private final VersionProvider<V> versionProvider;
     private final File dir;
-    private final int txLogSizeM;
     private final int snapshotCount;
     private final int snapshotIntervalSecs;
     private final Timer snapshotTimer;
@@ -44,7 +43,6 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         this.serializer = serializer;
         this.versionProvider = versionProvider;
         this.dir = dir;
-        this.txLogSizeM = txLogSizeM;
         this.snapshotCount = snapshotCount;
         this.snapshotIntervalSecs = snapshotIntervalSecs;
 
@@ -92,7 +90,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
             txLog.setFirstMessageId(mostRecentSnapshotId);
         }
 
-        storeId = snapshot == null ? generateRepositoryId() : snapshot.storeId;
+        storeId = snapshot == null ? generateStoreId() : snapshot.storeId;
         if (snapshot != null) {
             for (Map.Entry<String, Map<K, V>> e : snapshot.maps.entrySet()) {
                 maps.put(e.getKey(), new ConcurrentHashMap<K, V>(e.getValue()));
@@ -110,7 +108,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         }
         if (log.isDebugEnabled()) log.debug("Replayed " + count + " transaction(s)");
 
-        snapshotTimer = new Timer("datastore-snapshot-" + dir.getName(), true);
+        snapshotTimer = new Timer("kvstore-snapshot-" + dir.getName(), true);
     }
 
     private File[] getSnapshotFiles() {
@@ -119,7 +117,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         return files;
     }
 
-    private String generateRepositoryId() {
+    private String generateStoreId() {
         SecureRandom rnd = new SecureRandom();
         byte[] a = new byte[8];
         rnd.nextBytes(a);
@@ -147,14 +145,13 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     public synchronized void createSnapshot(OutputStream out) throws IOException {
         txLog.sync();
         Snapshot snapshot = createSnapshot();
-        snapshot.txId = txLog.getNextMessageId();
         serializer.serialize(snapshot, out);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public synchronized void loadSnapshot(InputStream in) throws IOException {
-        if (!isEmpty()) throw new IllegalStateException("Repository is not empty");
+        if (!isEmpty()) throw new IllegalStateException("KeyValueStore is not empty");
         Snapshot<K, V> snapshot = (Snapshot<K, V>)serializer.deserialize(in, Snapshot.class);
         if (snapshot.txId == null) throw new IllegalArgumentException("Snapshot is missing txId");
         storeId = snapshot.storeId;
@@ -231,11 +228,119 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         }
     }
 
+    /**
+     * Attempt to apply tx. It is first proposed to the cluster (if any) and written to the transaction log and then
+     * applied to our maps.
+     */
+    private synchronized Object exec(StoreTx<K, V> tx) {
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
+        try {
+            serializer.serialize(tx, bos);
+        } catch (IOException e) {
+            throw new KeyValueStoreException(e);
+        }
+        byte[] payload = bos.toByteArray();
+
+        propose(tx);
+        appendToTxLog(payload);
+        return apply(tx);
+    }
+
+    private void appendToTxLog(byte[] payload) {
+        long timestamp = System.currentTimeMillis();
+        boolean snapshotNow = false;
+        try {
+            long txId = txLog.append(timestamp, null, payload);
+            // the bytes calculation isn't perfectly accurate but good enough
+            long bytes = (txId + payload.length) - mostRecentSnapshotId;
+            snapshotNow = bytes > txLog.getMaxSize() / 2; // half our log space is gone so do a snapshot now
+        } catch (IOException e) {
+            throw new KeyValueStoreException("Error appending to txLog: " + e, e);
+            // todo we should go offline if we cannot write to our tx log
+        } finally {
+            scheduleSnapshot(snapshotNow);
+        }
+    }
+
+    private synchronized void scheduleSnapshot(boolean asap) {
+        if (!snapshotScheduled) {
+            snapshotTimer.schedule(new TimerTask() {
+                @Override
+                public void run() {
+                    try {
+                        synchronized (KeyValueStoreImpl.this) {
+                            snapshotScheduled = false;
+                        }
+                        saveSnapshot();
+                    } catch (Throwable e) {
+                        log.error("Error saving snapshot: " + e, e);
+                        // todo the store should go offline if it cannot save snapshots
+                    }
+                }
+            }, asap ? 1L : snapshotIntervalSecs * 1000L);
+        }
+    }
+
+    /**
+     * Propose tx as the next transaction to the cluster and return only when it has been accepted or throw a
+     * {@link KeyValueStoreException} otherwise.
+     */
+    private void propose(StoreTx<K, V> tx) {
+        // nop unless clustered
+    }
+
+    /**
+     * Make changes to our in memory maps based on tx.
+     */
+    private synchronized Object apply(StoreTx<K, V> tx) {
+        ConcurrentMap<K, V> m = maps.get(tx.namespace);
+        switch (tx.op) {
+            case PUT:
+            case REPLACE:
+                V existing = m != null ? m.get(tx.key) : null;
+                if (existing != null) {
+                    int v1 = versionProvider.getVersion(existing);
+                    int v2 = versionProvider.getVersion(tx.value);
+                    if (v1 != v2) {
+                        throw new OptimisticLockingException("Existing value for " + tx.namespace + "." + tx.key + " " +
+                                "has version " + v1 + ", new value has version " + v2 + ": " + tx.value);
+                    }
+                }
+                if (tx.op == StoreTx.Operation.PUT || existing != null) {
+                    if (m == null) maps.put(tx.namespace, m = new ConcurrentHashMap<K, V>());
+                    m.put(tx.key, tx.value);
+                }
+                return existing;
+
+            case REPLACE_KVV:
+                if (m == null) return Boolean.FALSE;
+                return m.replace(tx.key, tx.oldValue, tx.value);
+
+            case PUT_IF_ABSENT:
+                if (m == null) maps.put(tx.namespace, m = new ConcurrentHashMap<K, V>());
+                return m.putIfAbsent(tx.key, tx.value);
+
+            case REMOVE:
+                if (m == null) return null;
+                V ans = m.remove(tx.key);
+                if (m.isEmpty()) maps.remove(tx.namespace);
+                return ans;
+
+            case REMOVE_KV:
+                if (m == null) return Boolean.FALSE;
+                Boolean bool = m.remove(tx.key, tx.value);
+                if (m.isEmpty()) maps.remove(tx.namespace);
+                return bool;
+        }
+        throw new KeyValueStoreException("Unhandled operation: " + tx);
+    }
+
     @Override
-    public ConcurrentMap<K, V> namespace(String namespace) {
+    public ConcurrentMap<K, V> getMap(String namespace) {
         return new Namespace(namespace);
     }
 
+    @SuppressWarnings({"unchecked", "NullableProblems"})
     public class Namespace implements ConcurrentMap<K, V> {
 
         private final String namespace;
@@ -244,87 +349,73 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
             this.namespace = namespace;
         }
 
-        @Override
+        public V put(K key, V value) {
+            return (V)exec(new StoreTx<K, V>(namespace, StoreTx.Operation.PUT, key, value));
+        }
+
         public V putIfAbsent(K key, V value) {
-            return null;
+            return (V)exec(new StoreTx<K, V>(namespace, StoreTx.Operation.PUT_IF_ABSENT, key, value));
         }
 
-        @Override
+        public V remove(Object key) {
+            return (V)exec(new StoreTx<K, V>(namespace, StoreTx.Operation.REMOVE, (K) key));
+        }
+
         public boolean remove(Object key, Object value) {
-            return false;
+            return (Boolean)exec(new StoreTx<K, V>(namespace, StoreTx.Operation.REMOVE_KV, (K) key, (V) value));
         }
 
-        @Override
-        public boolean replace(K key, V oldValue, V newValue) {
-            return false;
-        }
-
-        @Override
         public V replace(K key, V value) {
-            return null;
+            return (V)exec(new StoreTx<K, V>(namespace, StoreTx.Operation.REPLACE, key, value));
         }
 
-        @Override
+        public boolean replace(K key, V oldValue, V newValue) {
+            return (Boolean)exec(new StoreTx<K, V>(namespace, StoreTx.Operation.REPLACE_KVV, key, newValue, oldValue));
+        }
+
+        public void putAll(Map<? extends K, ? extends V> m) {
+            for (Entry<? extends K, ? extends V> e : m.entrySet()) put(e.getKey(), e.getValue());
+        }
+
+        public void clear() {
+            for (String id : maps.keySet()) remove(id);
+        }
+
         public int size() {
             ConcurrentMap<K, V> m = maps.get(namespace);
             return m == null ? 0 : m.size();
         }
 
-        @Override
         public boolean isEmpty() {
             ConcurrentMap<K, V> m = maps.get(namespace);
             return m == null || m.isEmpty();
         }
 
-        @Override
         public boolean containsKey(Object key) {
             ConcurrentMap<K, V> m = maps.get(namespace);
             return m != null && m.containsKey(key);
         }
 
-        @Override
         public boolean containsValue(Object value) {
             ConcurrentMap<K, V> m = maps.get(namespace);
             return m != null && m.containsValue(value);
         }
 
-        @Override
         public V get(Object key) {
             ConcurrentMap<K, V> m = maps.get(namespace);
             return m == null ? null : m.get(key);
         }
 
-        @Override
-        public V put(K key, V value) {
-            return null;
-        }
-
-        @Override
-        public V remove(Object key) {
-            return null;
-        }
-
-        @Override
-        public void putAll(Map<? extends K, ? extends V> m) {
-        }
-
-        @Override
-        public void clear() {
-        }
-
-        @Override
         public Set<K> keySet() {
             ConcurrentMap<K, V> m = maps.get(namespace);
             return m == null ? null : m.keySet();
         }
 
-        @Override
         public Collection<V> values() {
             ConcurrentMap<K, V> m = maps.get(namespace);
             return m == null ? null : m.values();
         }
 
-        @Override
         public Set<Entry<K, V>> entrySet() {
             ConcurrentMap<K, V> m = maps.get(namespace);
             return m == null ? null : m.entrySet();

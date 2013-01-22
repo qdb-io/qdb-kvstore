@@ -1,4 +1,4 @@
-package io.qdb.store;
+package io.qdb.kvstore;
 
 import java.io.File;
 import java.io.IOException;

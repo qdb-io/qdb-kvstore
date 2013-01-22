@@ -1,4 +1,4 @@
-package io.qdb.store
+package io.qdb.kvstore
 
 import spock.lang.Specification
 

@@ -1,4 +1,4 @@
-package io.qdb.store;
+package io.qdb.kvstore;
 
 /**
  * Thrown on an attempt to create a new object with id the same as an existing object.
