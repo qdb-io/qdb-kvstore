@@ -10,7 +10,7 @@ import java.util.concurrent.ConcurrentMap
  * Basic non-clustered tests.
  */
 @Stepwise
-class BasicKvStoreSpec extends Specification {
+class MapApiSpec extends Specification {
 
     @Shared KeyValueStore<Integer, ModelObject> store
     @Shared ConcurrentMap<Integer, ModelObject> widgets

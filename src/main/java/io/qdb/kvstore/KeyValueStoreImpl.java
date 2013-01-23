@@ -112,7 +112,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     }
 
     private File[] getSnapshotFiles() {
-        File[] files = dir.listFiles(new PatternFilenameFilter("snapshot-[0-9a-f]+.json"));
+        File[] files = dir.listFiles(new PatternFilenameFilter("[0-9a-f]+\\.snapshot"));
         Arrays.sort(files);
         return files;
     }
@@ -144,14 +144,13 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     @Override
     public synchronized void createSnapshot(OutputStream out) throws IOException {
         txLog.sync();
-        Snapshot snapshot = createSnapshot();
-        serializer.serialize(snapshot, out);
+        serializer.serialize(createSnapshot(), out);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     public synchronized void loadSnapshot(InputStream in) throws IOException {
-        if (!isEmpty()) throw new IllegalStateException("KeyValueStore is not empty");
+        if (!isEmpty()) throw new IllegalStateException("Store is not empty");
         Snapshot<K, V> snapshot = (Snapshot<K, V>)serializer.deserialize(in, Snapshot.class);
         if (snapshot.txId == null) throw new IllegalArgumentException("Snapshot is missing txId");
         storeId = snapshot.storeId;
@@ -183,7 +182,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                 if (id == mostRecentSnapshotId) return; // nothing to do
                 snapshot = createSnapshot();
             }
-            File f = new File(dir, "snapshot-" + String.format("%016x", id) + ".json");
+            File f = new File(dir, String.format("%016x", id) + ".snapshot");
             if (log.isDebugEnabled()) log.debug("Creating " + f);
             boolean ok = false;
             FileOutputStream out = new FileOutputStream(f);
