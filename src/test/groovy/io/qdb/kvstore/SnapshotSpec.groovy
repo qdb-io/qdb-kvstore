@@ -14,18 +14,11 @@ import com.google.common.io.PatternFilenameFilter
 @Stepwise
 class SnapshotSpec extends Specification {
 
-    @Shared File dir = new File("build/test-snapshots")
-    @Shared KeyValueStore<Integer, ModelObject> store
-    @Shared ConcurrentMap<Integer, ModelObject> widgets
+    @Shared File baseDir = new File("build/test-snapshots")
     @Shared FilenameFilter filter = new PatternFilenameFilter(".+\\.snapshot")
 
-    def setupSpec() {
-        if (dir.exists() && dir.isDirectory()) FileUtils.deleteDirectory(dir)
-        store = createStore(dir)
-        widgets = store.getMap("widgets")
-    }
-
-    private KeyValueStore<Integer, ModelObject> createStore(File dir) {
+    private KeyValueStore<Integer, ModelObject> createStore(File dir, boolean nuke = true) {
+        if (nuke && dir.exists() && dir.isDirectory()) FileUtils.deleteDirectory(dir)
         return new KeyValueStoreBuilder<Integer, ModelObject>()
                 .dir(dir)
                 .serializer(new JsonSerializer())
@@ -34,27 +27,37 @@ class SnapshotSpec extends Specification {
     }
 
     def "saveSnapshot with no changes is NOP"() {
+        File dir = new File(baseDir, "one")
+        def store = createStore(dir)
         store.saveSnapshot()
+        store.close()
 
         expect:
         dir.list(filter).length == 0
     }
 
     def "saveSnapshot"() {
-        widgets.put(1, new ModelObject("one"))
+        File dir = new File(baseDir, "one")
+        def store = createStore(dir)
+        store.getMap("widgets").put(1, new ModelObject("one"))
         store.saveSnapshot()
+        store.close()
 
         expect:
         dir.list(filter).length == 1
     }
 
     def "loadSnapshot"() {
+        File dir = new File(baseDir, "one")
+        def store = createStore(dir, false)
+        def widgets = store.getMap("widgets")
+        def sz = widgets.size()
+        def one = widgets.get(1)
         store.close()
-        store = createStore(dir)
-        widgets = store.getMap("widgets")
 
         expect:
-        widgets.size() == 1
-        widgets.get(1).name == "one"
+        sz == 1
+        one.name == "one"
+        one.version == 1
     }
 }
