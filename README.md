@@ -1,9 +1,9 @@
 qdb-kvstore
 ===========
 
-Transactional in memory key/value store for objects. Writes the database to disk periodically in snapshot files.
-Uses a MessageBuffer as a tx log for replay from the last snapshot after a crash. Clustering is optional and
-all nodes in the cluster see the same view of the store.
+Transactional in memory key/value store. Writes the store to disk periodically in snapshot files. Uses a transaction
+log to replay from the last snapshot after a crash. Clustering is optional and all nodes in the cluster see the same
+view of the store.
 
 Fire's events when objects are created, updated or deleted.
 
@@ -19,6 +19,11 @@ Create a KeyValueStore using a KeyValueStoreBuilder:
         .versionProvider(new VersionProvider())
         .create();
 
+    ConcurrentMap<Integer, ModelObject> widgets = store.getMap("widgets");
+    widgets.put(1, new ModelObject("A widget"));
+    ...
+    ModelObject w = widgets.get(1);
+
 In this case the keys are Integer's and the values are ModelObject's.
 
 All parameters except dir and serializer are optional. The serializer is responsible for writing and reading objects
@@ -30,10 +35,9 @@ all map methods might throw a KeyValueStoreException and all writes to the store
 you are using optimistic locking then replacing one value with another will only work if the incoming value has
 the same version number as the existing value. If not an OptimisticLockingException is thrown.
 
-    ConcurrentMap<Integer, ModelObject> widgets = store.getMap("widgets");
-    widgets.put(1, new ModelObject("A widget"));
-    ...
-    ModelObject foobar = widgets.get(1);
+It is important to remember that your actual objects are stored in the map. **They are not copied on put or get**.
+So don't modify instances after putting them in or getting them from a map. A clone option may be added in future
+for extra safety.
 
 
 Changelog
