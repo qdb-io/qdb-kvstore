@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.JsonDeserializer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.fasterxml.jackson.databind.jsontype.TypeResolverBuilder;
 import com.fasterxml.jackson.databind.module.SimpleModule;
 import com.sun.tools.internal.ws.processor.model.*;
 
@@ -33,7 +34,14 @@ public class JsonSerializer implements KeyValueStore.Serializer {
         mapper.configure(SerializationFeature.INDENT_OUTPUT, true);
         mapper.configure(JsonParser.Feature.AUTO_CLOSE_SOURCE, false);
         mapper.configure(JsonGenerator.Feature.AUTO_CLOSE_TARGET, false);
-        mapper.enableDefaultTyping(ObjectMapper.DefaultTyping.JAVA_LANG_OBJECT);
+
+        mapper.enableDefaultTyping(ObjectMapper.DefaultTyping.JAVA_LANG_OBJECT, JsonTypeInfo.As.PROPERTY);
+
+//        TypeResolverBuilder<?> typer = new ObjectMapper.DefaultTypeResolverBuilder(
+//                ObjectMapper.DefaultTyping.JAVA_LANG_OBJECT);
+//        typer = typer.init(JsonTypeInfo.Id.CLASS, null);
+//        typer = typer.inclusion(JsonTypeInfo.As.PROPERTY);
+//        mapper.setDefaultTyping(typer);
     }
 
     @Override

@@ -57,6 +57,7 @@ class SnapshotSpec extends Specification {
 
         expect:
         sz == 1
+        one instanceof ModelObject
         one.name == "one"
         one.version == 1
     }

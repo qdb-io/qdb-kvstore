@@ -1,8 +1,15 @@
 package io.qdb.kvstore;
 
+import com.fasterxml.jackson.annotation.JsonSubTypes;
+import com.fasterxml.jackson.annotation.JsonTypeInfo;
+
 /**
  * What we store for tests.
  */
+@JsonTypeInfo(use=JsonTypeInfo.Id.NAME, include=JsonTypeInfo.As.PROPERTY, property="class")
+@JsonSubTypes({
+    @JsonSubTypes.Type(value = ModelObject.class, name = "ModelObject")
+})
 public class ModelObject {
 
     public int version;
