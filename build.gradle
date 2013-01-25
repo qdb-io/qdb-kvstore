@@ -1,5 +1,6 @@
 apply plugin: 'java'
 apply plugin: 'maven'
+apply plugin: 'signing'
 apply plugin: 'groovy'
 apply from: file("etc/emma.gradle")
 
@@ -31,7 +32,58 @@ task sourceJar(type: Jar) {
     from sourceSets.main.allSource
 }
 
-artifacts {
-    archives sourceJar
+task javadocJar(type: Jar, dependsOn:javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
 }
 
+artifacts {
+    archives sourceJar
+    archives javadocJar
+}
+
+signing {
+    sign configurations.archives
+}
+
+def sonatypeUsername = properties.sonatypeUsername
+def sonatypePassword = properties.sonatypePassword
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            beforeDeployment { deployment -> signing.signPom(deployment) }
+            if (version.endsWith("SNAPSHOT")) {
+                repository(url: "https://oss.sonatype.org/content/repositories/snapshots") {
+                    authentication(userName: sonatypeUsername, password: sonatypePassword)
+                }
+            } else {
+                repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2") {
+                    authentication(userName: sonatypeUsername, password: sonatypePassword)
+                }
+            }
+            pom.project {
+                name 'qdb-kvstore'
+                packaging 'jar'
+                description 'Transactional in memory key/value store with disk based transaction log and clustering'
+                url 'http://qdb.io/qdb-kvstore'
+                scm {
+                    url 'scm:git@github.com:qdb-io/qdb-kvstore.git'
+                }
+                licenses {
+                    license {
+                        name 'The Apache Software License, Version 2.0'
+                        url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        id 'davidtinker'
+                        name 'David Tinker'
+                    }
+                }
+            }
+        }
+    }
+}
