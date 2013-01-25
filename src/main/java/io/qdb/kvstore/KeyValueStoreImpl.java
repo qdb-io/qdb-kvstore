@@ -1,7 +1,5 @@
 package io.qdb.kvstore;
 
-import com.google.common.io.PatternFilenameFilter;
-import com.sun.tools.internal.ws.processor.model.ModelException;
 import io.qdb.buffer.MessageBuffer;
 import io.qdb.buffer.MessageCursor;
 import io.qdb.buffer.PersistentMessageBuffer;
@@ -98,7 +96,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
             StoreTx tx = this.serializer.deserialize(new ByteArrayInputStream(c.getPayload()), StoreTx.class);
             try {
                 apply(tx);
-            } catch (ModelException e) {
+            } catch (KeyValueStoreException e) {
                 if (log.isDebugEnabled()) log.debug("Got " + e + " replaying " + tx);
             }
         }
@@ -108,7 +106,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     }
 
     private File[] getSnapshotFiles() {
-        File[] files = dir.listFiles(new PatternFilenameFilter("[0-9a-f]+\\.snapshot"));
+        File[] files = dir.listFiles(new RegexFilenameFilter("[0-9a-f]+\\.snapshot"));
         Arrays.sort(files);
         return files;
     }

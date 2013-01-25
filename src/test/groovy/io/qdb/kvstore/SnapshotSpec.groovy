@@ -5,9 +5,6 @@ import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Stepwise
 
-import java.util.concurrent.ConcurrentMap
-import com.google.common.io.PatternFilenameFilter
-
 /**
  * Saving and loading snapshots.
  */
@@ -15,7 +12,7 @@ import com.google.common.io.PatternFilenameFilter
 class SnapshotSpec extends Specification {
 
     @Shared File baseDir = new File("build/test-snapshots")
-    @Shared FilenameFilter filter = new PatternFilenameFilter(".+\\.snapshot")
+    @Shared FilenameFilter filter = new RegexFilenameFilter(".+\\.snapshot")
 
     private KeyValueStore<Integer, ModelObject> createStore(File dir, boolean nuke = true) {
         if (nuke && dir.exists() && dir.isDirectory()) FileUtils.deleteDirectory(dir)
@@ -47,7 +44,7 @@ class SnapshotSpec extends Specification {
         dir.list(filter).length == 1
     }
 
-    def "loadSnapshot"() {
+    def "loadSnapshot on startup"() {
         File dir = new File(baseDir, "one")
         def store = createStore(dir, false)
         def widgets = store.getMap("widgets")
