@@ -1,9 +1,11 @@
 package io.qdb.kvstore;
 
+import java.io.Serializable;
+
 /**
  * A change to a data store.
  */
-public class StoreTx<K, V> {
+public class StoreTx<K, V> implements Serializable {
 
     enum Operation { PUT, REMOVE, PUT_IF_ABSENT, REMOVE_KV, REPLACE, REPLACE_KVV }
 
@@ -13,7 +15,6 @@ public class StoreTx<K, V> {
     public V value;
     public V oldValue;
 
-    @SuppressWarnings("UnusedDeclaration")
     public StoreTx() { }
 
     public StoreTx(String namespace, Operation op, K key) {

@@ -1,9 +1,6 @@
 package io.qdb.kvstore;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
 
@@ -45,7 +42,7 @@ public interface KeyValueStore<K, V> extends Closeable {
     /**
      * A copy of the data in a data store.
      */
-    public static class Snapshot<K, V> {
+    public static class Snapshot<K, V> implements Serializable {
         public Long txId;
         public String storeId;
         public Map<String, Map<K, V>> maps;
@@ -53,7 +50,7 @@ public interface KeyValueStore<K, V> extends Closeable {
 
     /**
      * Responsible for converting objects to/from streams. Note that this must be able to serialize
-     * {@link Snapshot} and {@link StoreTx} instances as well as K and V instances.
+     * {@link Snapshot} and {@link StoreTx} instances which will reference K and V instances.
      */
     interface Serializer {
         public void serialize(Object value, OutputStream out) throws IOException;
