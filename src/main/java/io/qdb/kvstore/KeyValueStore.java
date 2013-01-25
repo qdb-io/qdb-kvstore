@@ -71,4 +71,38 @@ public interface KeyValueStore<K, V> extends Closeable {
         /** Bump up the version number of value. NOP if not using versioning. */
         public void incVersion(V value);
     }
+
+    /**
+     * Receives notification of changes to the store.
+     */
+    interface Listener<K, V> {
+        void onKeyValueStoreEvent(Event<K, V> ev);
+    }
+
+    /**
+     * A change to the store.
+     */
+    public static class Event<K, V> {
+
+        enum Type { CREATED, UPDATED, DELETED }
+
+        public final KeyValueStore<K, V> store;
+        public final String map;
+        public final Type type;
+        public final K key;
+        public final V value;
+
+        public Event(KeyValueStore<K, V> store, String map, Type type, K key, V value) {
+            this.store = store;
+            this.type = type;
+            this.map = map;
+            this.key = key;
+            this.value = value;
+        }
+
+        @Override
+        public String toString() {
+            return type + " " + map + "." + key + "=" + value;
+        }
+    }
 }

@@ -12,6 +12,7 @@ public class KeyValueStoreBuilder<K, V> {
     private File dir;
     private KeyValueStore.Serializer serializer;
     private KeyValueStore.VersionProvider<V> versionProvider;
+    private KeyValueStore.Listener<K, V> listener;
     private int txLogSizeM = 10;
     private int maxObjectSize = 100000;
     private int snapshotCount = 3;
@@ -23,8 +24,8 @@ public class KeyValueStoreBuilder<K, V> {
         if (dir == null) throw new IllegalStateException("dir is required");
         if (serializer == null) throw new IllegalStateException("serializer is required");
         if (versionProvider == null) versionProvider = new NullVersionProvider<V>();
-        return new KeyValueStoreImpl<K, V>(serializer, versionProvider, dir, txLogSizeM, maxObjectSize, snapshotCount,
-                snapshotIntervalSecs);
+        return new KeyValueStoreImpl<K, V>(serializer, versionProvider, listener, dir, txLogSizeM, maxObjectSize,
+                snapshotCount, snapshotIntervalSecs);
     }
 
     /**
@@ -57,6 +58,14 @@ public class KeyValueStoreBuilder<K, V> {
      */
     public KeyValueStoreBuilder versionProvider(KeyValueStore.VersionProvider<V> versionProvider) {
         this.versionProvider = versionProvider;
+        return this;
+    }
+
+    /**
+     * If you want to be notified when the store is changed then supply a listener.
+     */
+    public KeyValueStoreBuilder listener(KeyValueStore.Listener<K, V> listener) {
+        this.listener = listener;
         return this;
     }
 

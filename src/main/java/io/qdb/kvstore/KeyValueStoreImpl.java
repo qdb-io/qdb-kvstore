@@ -22,6 +22,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
 
     private final Serializer serializer;
     private final VersionProvider<V> versionProvider;
+    private final Listener<K, V> listener;
     private final File dir;
     private final int snapshotCount;
     private final int snapshotIntervalSecs;
@@ -36,8 +37,9 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     private final ConcurrentMap<String, ConcurrentMap<K, V>> maps = new ConcurrentHashMap<String, ConcurrentMap<K, V>>();
 
     @SuppressWarnings("unchecked")
-    KeyValueStoreImpl(Serializer serializer, VersionProvider<V> versionProvider, File dir, int txLogSizeM,
-                      int maxObjectSize, int snapshotCount, int snapshotIntervalSecs) throws IOException {
+    KeyValueStoreImpl(Serializer serializer, VersionProvider<V> versionProvider, Listener<K, V> listener,
+                File dir, int txLogSizeM, int maxObjectSize, int snapshotCount, int snapshotIntervalSecs)
+            throws IOException {
         this.serializer = serializer;
         this.versionProvider = versionProvider;
         this.dir = dir;
@@ -101,6 +103,9 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
             }
         }
         if (log.isDebugEnabled()) log.debug("Replayed " + count + " transaction(s)");
+
+        // set listener now so it doesn't get events when transactions are replayed
+        this.listener = listener;
 
         snapshotTimer = new Timer("kvstore-snapshot-" + dir.getName(), true);
     }
@@ -303,25 +308,44 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                     if (m == null) maps.put(tx.map, m = new ConcurrentHashMap<K, V>());
                     versionProvider.incVersion(tx.value);
                     m.put(tx.key, tx.value);
+                    if (listener != null) {
+                        listener.onKeyValueStoreEvent(
+                            new Event<K, V>(this, tx.map, existing == null ? Event.Type.CREATED : Event.Type.UPDATED,
+                                    tx.key, tx.value));
+                    }
                 }
                 return existing;
 
             case REPLACE_KVV:
                 if (m == null) return Boolean.FALSE;
+                versionProvider.incVersion(tx.value);
                 boolean replace = m.replace(tx.key, tx.oldValue, tx.value);
-                if (replace) versionProvider.incVersion(tx.value);
+                if (replace) {
+                    if (listener != null) {
+                        listener.onKeyValueStoreEvent(
+                                new Event<K, V>(this, tx.map, Event.Type.UPDATED, tx.key, tx.value));
+                    }
+                }
                 return replace;
 
             case PUT_IF_ABSENT:
                 if (m == null) maps.put(tx.map, m = new ConcurrentHashMap<K, V>());
+                versionProvider.incVersion(tx.value);
                 V v = m.putIfAbsent(tx.key, tx.value);
-                if (v == null) versionProvider.incVersion(tx.value);
+                if (v == null && listener != null) {
+                    listener.onKeyValueStoreEvent(
+                            new Event<K, V>(this, tx.map, Event.Type.CREATED, tx.key, tx.value));
+                }
                 return v;
 
             case REMOVE:
                 if (m == null) return null;
                 V ans = m.remove(tx.key);
                 if (m.isEmpty()) maps.remove(tx.map);
+                if (ans != null && listener != null) {
+                    listener.onKeyValueStoreEvent(
+                            new Event<K, V>(this, tx.map, Event.Type.DELETED, tx.key, ans));
+                }
                 return ans;
 
             case REMOVE_KV:
@@ -329,9 +353,13 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                 existing = m.get(tx.key);
                 if (existing == null) return Boolean.FALSE;
                 checkVersionNumbers(tx, existing);
-                Boolean bool = m.remove(tx.key, tx.value);
+                Boolean removed = m.remove(tx.key, tx.value);
                 if (m.isEmpty()) maps.remove(tx.map);
-                return bool;
+                if (removed && listener != null) {
+                    listener.onKeyValueStoreEvent(
+                            new Event<K, V>(this, tx.map, Event.Type.DELETED, tx.key, tx.value));
+                }
+                return removed;
         }
         throw new KeyValueStoreException("Unhandled operation: " + tx);
     }

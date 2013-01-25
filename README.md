@@ -7,6 +7,8 @@ view of the store.
 
 Fire's events when objects are created, updated or deleted.
 
+Reading from the store is just about as fast as reading from java.util.ConcurrentHashMap.
+
 
 Usage
 -----
@@ -17,6 +19,7 @@ Create a KeyValueStore using a KeyValueStoreBuilder:
         .dir(dir)
         .serializer(new JsonSerializer())
         .versionProvider(new VersionProvider())
+        .listener(new ListenerImpl())
         .create();
 
     ConcurrentMap<Integer, ModelObject> widgets = store.getMap("widgets");
@@ -38,6 +41,10 @@ the same version number as the existing value. If not an OptimisticLockingExcept
 It is important to remember that your actual objects are stored in the map. **They are not copied on put or get**.
 So don't modify instances after putting them in or getting them from a map. A clone option may be added in future
 for extra safety.
+
+If optimistic locking is used then adding or replacing a value in a map will bump up its version. If you use
+the ConcurrentMap putIfAbsent or replace methods then the incoming object will have its version incremented even if
+it doesn't end up in the map. This is to prevent it from being in the map with an old version for any period of time.
 
 
 Changelog
