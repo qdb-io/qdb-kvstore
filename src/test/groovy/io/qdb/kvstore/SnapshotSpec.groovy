@@ -14,7 +14,7 @@ class SnapshotSpec extends Specification {
     @Shared File baseDir = new File("build/test-snapshots")
     @Shared FilenameFilter filter = new RegexFilenameFilter(".+\\.snapshot")
 
-    private KeyValueStore<Integer, ModelObject> createStore(File dir, boolean nuke = true) {
+    private KeyValueStore<String, ModelObject> createStore(File dir, boolean nuke = true) {
         if (nuke && dir.exists() && dir.isDirectory()) FileUtils.deleteDirectory(dir)
         return new KeyValueStoreBuilder<Integer, ModelObject>()
                 .dir(dir)
@@ -36,7 +36,7 @@ class SnapshotSpec extends Specification {
     def "saveSnapshot"() {
         File dir = new File(baseDir, "one")
         def store = createStore(dir)
-        store.getMap("widgets").put(1, new ModelObject("one"))
+        store.getMap("widgets").put("1", new ModelObject("one"))
         store.saveSnapshot()
         store.close()
 
@@ -45,8 +45,7 @@ class SnapshotSpec extends Specification {
     }
 
     def "loadSnapshot on startup"() {
-        File dir = new File(baseDir, "one")
-        def store = createStore(dir, false)
+        def store = createStore(new File(baseDir, "one"), false)
         def widgets = store.getMap("widgets")
         def sz = widgets.size()
         def one = widgets.get("1")
@@ -58,4 +57,54 @@ class SnapshotSpec extends Specification {
         one.name == "one"
         one.version == 1
     }
+
+    def "transfer snapshot"() {
+        def store = createStore(new File(baseDir, "one"), false)
+        def store2 = createStore(new File(baseDir, "two"), true)
+
+        ByteArrayOutputStream bos = new ByteArrayOutputStream()
+        store.createSnapshot(bos)
+        store2.loadSnapshot(new ByteArrayInputStream(bos.toByteArray()))
+
+        IllegalStateException exception = null
+        try {
+            store2.loadSnapshot(new ByteArrayInputStream(bos.toByteArray()))
+        } catch (IllegalStateException e) {
+            exception = e;
+        }
+
+        def widgets = store2.getMap("widgets")
+        def sz = widgets.size()
+        def one = widgets.get("1")
+        store.close()
+        store2.close()
+
+        expect:
+        sz == 1
+        one instanceof ModelObject
+        one.name == "one"
+        one.version == 1
+        exception != null
+    }
+
+    def "replay tx log on startup"() {
+        File dir = new File(baseDir, "three")
+        def store = createStore(dir)
+        store.getMap("widgets").put("1", new ModelObject("one"))
+        store.close()
+
+        store = createStore(dir, false)
+        def widgets = store.getMap("widgets")
+        def sz = widgets.size()
+        def one = widgets.get("1")
+        store.close()
+
+        expect:
+        sz == 1
+        one instanceof ModelObject
+        one.name == "one"
+        one.version == 1
+    }
+
+
 }
