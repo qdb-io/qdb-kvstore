@@ -52,7 +52,7 @@ class SnapshotSpec extends Specification {
         def store = createStore(dir, false)
         def widgets = store.getMap("widgets")
         def sz = widgets.size()
-        def one = widgets.get(1)
+        def one = widgets.get("1")
         store.close()
 
         expect:

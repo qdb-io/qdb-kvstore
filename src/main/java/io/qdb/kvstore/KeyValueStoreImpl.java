@@ -91,11 +91,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         }
 
         storeId = snapshot == null ? generateStoreId() : snapshot.storeId;
-        if (snapshot != null) {
-            for (Map.Entry<String, Map<K, V>> e : snapshot.maps.entrySet()) {
-                maps.put(e.getKey(), new ConcurrentHashMap<K, V>(e.getValue()));
-            }
-        }
+        if (snapshot != null) populateMapsFromSnapshot(snapshot);
 
         int count = 0;
         for (MessageCursor c = txLog.cursor(mostRecentSnapshotId); c.next(); count++) {
@@ -130,6 +126,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         txLog.close();
     }
 
+    @SuppressWarnings("unchecked")
     private synchronized Snapshot<K, V> createSnapshot() throws IOException {
         Snapshot<K, V> s = new Snapshot<K, V>();
         s.storeId = storeId;
@@ -155,10 +152,14 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         if (snapshot.txId == null) throw new IllegalArgumentException("Snapshot is missing txId");
         storeId = snapshot.storeId;
         txLog.setFirstMessageId(snapshot.txId);
+        populateMapsFromSnapshot(snapshot);
+        saveSnapshot();
+    }
+
+    private void populateMapsFromSnapshot(Snapshot<K, V> snapshot) {
         for (Map.Entry<String, Map<K, V>> e : snapshot.maps.entrySet()) {
             maps.put(e.getKey(), new ConcurrentHashMap<K, V>(e.getValue()));
         }
-        saveSnapshot();
     }
 
     @Override
@@ -284,6 +285,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
      * Propose tx as the next transaction to the cluster and return only when it has been accepted or throw a
      * {@link KeyValueStoreException} otherwise.
      */
+    @SuppressWarnings("UnusedParameters")
     private void propose(StoreTx<K, V> tx) {
         // nop unless clustered
     }

@@ -12,9 +12,9 @@ import java.util.concurrent.ConcurrentMap
 @Stepwise
 class MapApiSpec extends Specification {
 
-    @Shared KeyValueStore<Integer, ModelObject> store
-    @Shared ConcurrentMap<Integer, ModelObject> widgets
-    @Shared ConcurrentMap<Integer, ModelObject> bugs
+    @Shared KeyValueStore<String, ModelObject> store
+    @Shared ConcurrentMap<String, ModelObject> widgets
+    @Shared ConcurrentMap<String, ModelObject> bugs
 
     def setupSpec() {
         def dir = new File("build/test-basic")
@@ -36,9 +36,9 @@ class MapApiSpec extends Specification {
     }
 
     def "put and get"() {
-        def put = widgets.put(1, new ModelObject("one"))
-        def get = widgets.get(1)
-        def none = bugs.get(1)
+        def put = widgets.put("1", new ModelObject("one"))
+        def get = widgets.get("1")
+        def none = bugs.get("1")
 
         expect:
         !store.isEmpty()
@@ -52,17 +52,17 @@ class MapApiSpec extends Specification {
 
     def "opt lock check on put"() {
         when:
-        widgets.put(1, new ModelObject("one"))
+        widgets.put("1", new ModelObject("one"))
 
         then:
         thrown(OptimisticLockingException)
     }
 
     def "putIfAbsent"() {
-        def ans1 = widgets.putIfAbsent(1, new ModelObject("onexx"))
-        def get1 = widgets.get(1)
-        def ans2 = widgets.putIfAbsent(2, new ModelObject("two"))
-        def get2 = widgets.get(2)
+        def ans1 = widgets.putIfAbsent("1", new ModelObject("onexx"))
+        def get1 = widgets.get("1")
+        def ans2 = widgets.putIfAbsent("2", new ModelObject("two"))
+        def get2 = widgets.get("2")
 
         expect:
         ans1.name == "one"
@@ -73,10 +73,10 @@ class MapApiSpec extends Specification {
     }
 
     def "replace"() {
-        def ans1 = widgets.replace(1, new ModelObject("onexx", 1))
-        def get1 = widgets.get(1)
-        def ans3 = widgets.replace(3, new ModelObject("three"))
-        def get3 = widgets.get(3)
+        def ans1 = widgets.replace("1", new ModelObject("onexx", 1))
+        def get1 = widgets.get("1")
+        def ans3 = widgets.replace("3", new ModelObject("three"))
+        def get3 = widgets.get("3")
 
         expect:
         ans1.name == "one"
@@ -87,9 +87,9 @@ class MapApiSpec extends Specification {
     }
 
     def "replace oldValue newValue"() {
-        def ans0 = widgets.replace(1, new ModelObject("onex"), new ModelObject("one"))
-        def ans1 = widgets.replace(1, new ModelObject("onexx"), new ModelObject("one"))
-        def get1 = widgets.get(1)
+        def ans0 = widgets.replace("1", new ModelObject("onex"), new ModelObject("one"))
+        def ans1 = widgets.replace("1", new ModelObject("onexx"), new ModelObject("one"))
+        def get1 = widgets.get("1")
 
         expect:
         !ans0
@@ -99,8 +99,8 @@ class MapApiSpec extends Specification {
     }
 
     def "remove"() {
-        def ans = widgets.remove(2)
-        def get = widgets.get(2)
+        def ans = widgets.remove("2")
+        def get = widgets.get("2")
 
         expect:
         ans.name == "two"
@@ -109,17 +109,17 @@ class MapApiSpec extends Specification {
 
     def "remove value opt lock check"() {
         when:
-        widgets.put(2, new ModelObject("two", 22))
-        widgets.remove(2, new ModelObject("two"))
+        widgets.put("2", new ModelObject("two", 22))
+        widgets.remove("2", new ModelObject("two"))
 
         then:
         thrown(OptimisticLockingException)
     }
 
     def "remove value"() {
-        def ans0 = widgets.remove(2, new ModelObject("twox", 23))
-        def ans2 = widgets.remove(2, new ModelObject("two", 23))
-        def get = widgets.get(2)
+        def ans0 = widgets.remove("2", new ModelObject("twox", 23))
+        def ans2 = widgets.remove("2", new ModelObject("two", 23))
+        def get = widgets.get("2")
 
         expect:
         !ans0
@@ -132,7 +132,7 @@ class MapApiSpec extends Specification {
         def none = bugs.keySet()
 
         expect:
-        keys == [1]
+        keys == ["1"]
         none.isEmpty()
     }
 
@@ -152,7 +152,7 @@ class MapApiSpec extends Specification {
 
         expect:
         es.size() == 1
-        es[0].key == 1
+        es[0].key == "1"
         es[0].value.name == "one"
         none.isEmpty()
     }
@@ -167,9 +167,9 @@ class MapApiSpec extends Specification {
     }
 
     def "containsKey"() {
-        def one = widgets.containsKey(1)
-        def two = widgets.containsKey(2)
-        def none = bugs.containsKey(1)
+        def one = widgets.containsKey("1")
+        def two = widgets.containsKey("2")
+        def none = bugs.containsKey("1")
 
         expect:
         one
@@ -197,8 +197,8 @@ class MapApiSpec extends Specification {
     }
 
     def "putAll"() {
-        Map<Integer, ModelObject> map = [:]
-        map.put(1, new ModelObject("one"))
+        Map<String, ModelObject> map = [:]
+        map.put("1", new ModelObject("one"))
         widgets.putAll(map)
 
         expect:
