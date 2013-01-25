@@ -28,6 +28,10 @@ class MapApiSpec extends Specification {
         bugs = store.getMap("bugs")
     }
 
+    def cleanupSpec() {
+        store.close()
+    }
+
     def "isEmpty"() {
         expect:
         store.isEmpty()
@@ -48,6 +52,7 @@ class MapApiSpec extends Specification {
         get.name == "one"
         get.version == 1
         none == null
+        store.mapNames == ["widgets"]
     }
 
     def "opt lock check on put"() {
@@ -194,6 +199,7 @@ class MapApiSpec extends Specification {
 
         expect:
         widgets.isEmpty()
+        store.mapNames == []
     }
 
     def "putAll"() {
