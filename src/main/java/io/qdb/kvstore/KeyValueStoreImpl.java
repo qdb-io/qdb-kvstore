@@ -292,7 +292,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
      * Make changes to our in memory maps based on tx.
      */
     private synchronized Object apply(StoreTx<K, V> tx) {
-        ConcurrentMap<K, V> m = maps.get(tx.namespace);
+        ConcurrentMap<K, V> m = maps.get(tx.map);
         V existing;
         switch (tx.op) {
             case PUT:
@@ -300,7 +300,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                 existing = m != null ? m.get(tx.key) : null;
                 if (existing != null) checkVersionNumbers(tx, existing);
                 if (tx.op == StoreTx.Operation.PUT || existing != null) {
-                    if (m == null) maps.put(tx.namespace, m = new ConcurrentHashMap<K, V>());
+                    if (m == null) maps.put(tx.map, m = new ConcurrentHashMap<K, V>());
                     versionProvider.incVersion(tx.value);
                     m.put(tx.key, tx.value);
                 }
@@ -313,7 +313,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                 return replace;
 
             case PUT_IF_ABSENT:
-                if (m == null) maps.put(tx.namespace, m = new ConcurrentHashMap<K, V>());
+                if (m == null) maps.put(tx.map, m = new ConcurrentHashMap<K, V>());
                 V v = m.putIfAbsent(tx.key, tx.value);
                 if (v == null) versionProvider.incVersion(tx.value);
                 return v;
@@ -321,7 +321,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
             case REMOVE:
                 if (m == null) return null;
                 V ans = m.remove(tx.key);
-                if (m.isEmpty()) maps.remove(tx.namespace);
+                if (m.isEmpty()) maps.remove(tx.map);
                 return ans;
 
             case REMOVE_KV:
@@ -330,7 +330,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                 if (existing == null) return Boolean.FALSE;
                 checkVersionNumbers(tx, existing);
                 Boolean bool = m.remove(tx.key, tx.value);
-                if (m.isEmpty()) maps.remove(tx.namespace);
+                if (m.isEmpty()) maps.remove(tx.map);
                 return bool;
         }
         throw new KeyValueStoreException("Unhandled operation: " + tx);
@@ -340,47 +340,52 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         Object v1 = versionProvider.getVersion(existing);
         Object v2 = versionProvider.getVersion(tx.value);
         if (v1 != null && !v1.equals(v2)) {
-            throw new OptimisticLockingException("Existing value for " + tx.namespace + "." + tx.key + " " +
+            throw new OptimisticLockingException("Existing value for " + tx.map + "." + tx.key + " " +
                     "has version " + v1 + ", value has version " + v2 + ": " + tx.value);
         }
     }
 
     @Override
-    public ConcurrentMap<K, V> getMap(String namespace) {
-        return new Namespace(namespace);
+    public List<String> getMapNames() {
+        return new ArrayList<String>(maps.keySet());
+    }
+
+    @Override
+    public ConcurrentMap<K, V> getMap(String name) {
+        return new Namespace(name);
     }
 
     @SuppressWarnings({"unchecked", "NullableProblems"})
     public class Namespace implements ConcurrentMap<K, V> {
 
-        private final String namespace;
+        private final String name;
 
-        public Namespace(String namespace) {
-            this.namespace = namespace;
+        public Namespace(String name) {
+            this.name = name;
         }
 
         public V put(K key, V value) {
-            return (V)exec(new StoreTx<K, V>(namespace, StoreTx.Operation.PUT, key, value));
+            return (V)exec(new StoreTx<K, V>(name, StoreTx.Operation.PUT, key, value));
         }
 
         public V putIfAbsent(K key, V value) {
-            return (V)exec(new StoreTx<K, V>(namespace, StoreTx.Operation.PUT_IF_ABSENT, key, value));
+            return (V)exec(new StoreTx<K, V>(name, StoreTx.Operation.PUT_IF_ABSENT, key, value));
         }
 
         public V remove(Object key) {
-            return (V)exec(new StoreTx<K, V>(namespace, StoreTx.Operation.REMOVE, (K) key));
+            return (V)exec(new StoreTx<K, V>(name, StoreTx.Operation.REMOVE, (K) key));
         }
 
         public boolean remove(Object key, Object value) {
-            return (Boolean)exec(new StoreTx<K, V>(namespace, StoreTx.Operation.REMOVE_KV, (K) key, (V) value));
+            return (Boolean)exec(new StoreTx<K, V>(name, StoreTx.Operation.REMOVE_KV, (K) key, (V) value));
         }
 
         public V replace(K key, V value) {
-            return (V)exec(new StoreTx<K, V>(namespace, StoreTx.Operation.REPLACE, key, value));
+            return (V)exec(new StoreTx<K, V>(name, StoreTx.Operation.REPLACE, key, value));
         }
 
         public boolean replace(K key, V oldValue, V newValue) {
-            return (Boolean)exec(new StoreTx<K, V>(namespace, StoreTx.Operation.REPLACE_KVV, key, newValue, oldValue));
+            return (Boolean)exec(new StoreTx<K, V>(name, StoreTx.Operation.REPLACE_KVV, key, newValue, oldValue));
         }
 
         public void putAll(Map<? extends K, ? extends V> m) {
@@ -388,49 +393,49 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         }
 
         public void clear() {
-            ConcurrentMap<K, V> m = maps.get(namespace);
+            ConcurrentMap<K, V> m = maps.get(name);
             if (m == null) return;
             List<K> list = new ArrayList<K>(m.keySet());
             for (K id : list) remove(id);
         }
 
         public int size() {
-            ConcurrentMap<K, V> m = maps.get(namespace);
+            ConcurrentMap<K, V> m = maps.get(name);
             return m == null ? 0 : m.size();
         }
 
         public boolean isEmpty() {
-            ConcurrentMap<K, V> m = maps.get(namespace);
+            ConcurrentMap<K, V> m = maps.get(name);
             return m == null || m.isEmpty();
         }
 
         public boolean containsKey(Object key) {
-            ConcurrentMap<K, V> m = maps.get(namespace);
+            ConcurrentMap<K, V> m = maps.get(name);
             return m != null && m.containsKey(key);
         }
 
         public boolean containsValue(Object value) {
-            ConcurrentMap<K, V> m = maps.get(namespace);
+            ConcurrentMap<K, V> m = maps.get(name);
             return m != null && m.containsValue(value);
         }
 
         public V get(Object key) {
-            ConcurrentMap<K, V> m = maps.get(namespace);
+            ConcurrentMap<K, V> m = maps.get(name);
             return m == null ? null : m.get(key);
         }
 
         public Set<K> keySet() {
-            ConcurrentMap<K, V> m = maps.get(namespace);
+            ConcurrentMap<K, V> m = maps.get(name);
             return m == null ? Collections.EMPTY_SET : m.keySet();
         }
 
         public Collection<V> values() {
-            ConcurrentMap<K, V> m = maps.get(namespace);
+            ConcurrentMap<K, V> m = maps.get(name);
             return m == null ? Collections.EMPTY_LIST : m.values();
         }
 
         public Set<Entry<K, V>> entrySet() {
-            ConcurrentMap<K, V> m = maps.get(namespace);
+            ConcurrentMap<K, V> m = maps.get(name);
             return m == null ? Collections.EMPTY_SET : m.entrySet();
         }
     }

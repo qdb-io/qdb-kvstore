@@ -9,7 +9,7 @@ class SerializerSpec extends Specification {
 
     def "Serialize/deserialize tx"() {
         StoreTx tx = new StoreTx()
-        tx.namespace = "widgets"
+        tx.map = "widgets"
         tx.op = StoreTx.Operation.PUT
         tx.key = 1
         tx.value = new ModelObject("one");

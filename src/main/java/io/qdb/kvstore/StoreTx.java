@@ -9,7 +9,7 @@ public class StoreTx<K, V> implements Serializable {
 
     enum Operation { PUT, REMOVE, PUT_IF_ABSENT, REMOVE_KV, REPLACE, REPLACE_KVV }
 
-    public String namespace;
+    public String map;
     public Operation op;
     public K key;
     public V value;
@@ -17,16 +17,16 @@ public class StoreTx<K, V> implements Serializable {
 
     public StoreTx() { }
 
-    public StoreTx(String namespace, Operation op, K key) {
-        this(namespace, op, key, null, null);
+    public StoreTx(String map, Operation op, K key) {
+        this(map, op, key, null, null);
     }
 
-    public StoreTx(String namespace, Operation op, K key, V value) {
-        this(namespace, op, key, value, null);
+    public StoreTx(String map, Operation op, K key, V value) {
+        this(map, op, key, value, null);
     }
 
-    public StoreTx(String namespace, Operation op, K key, V value, V oldValue) {
-        this.namespace = namespace;
+    public StoreTx(String map, Operation op, K key, V value, V oldValue) {
+        this.map = map;
         this.op = op;
         this.key = key;
         this.value = value;
@@ -35,7 +35,7 @@ public class StoreTx<K, V> implements Serializable {
 
     @Override
     public String toString() {
-        return namespace + " " + op + " k=" + key + (value == null ? "" : " v=" + value) +
+        return map + " " + op + " k=" + key + (value == null ? "" : " v=" + value) +
                 (oldValue == null ? "" : " ov=" + oldValue);
     }
 

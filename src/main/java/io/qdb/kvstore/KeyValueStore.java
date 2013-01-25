@@ -1,7 +1,9 @@
 package io.qdb.kvstore;
 
 import java.io.*;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 
 /**
@@ -11,33 +13,38 @@ import java.util.concurrent.ConcurrentMap;
 public interface KeyValueStore<K, V> extends Closeable {
 
     /**
-     * Get a namespace for storing objects. It is only actually created when the first object is stored.
+     * Get a map for storing objects. It is only actually created when the first object is stored.
      * All methods in the map might throw {@link KeyValueStoreException}.
      */
-    public ConcurrentMap<K, V> getMap(String namespace);
+    ConcurrentMap<K, V> getMap(String name);
 
     /**
      * Create a snapshot of our data. This is useful for transferring our state to another KeyValueStore (maybe
      * on a different machine).
      */
-    public void createSnapshot(OutputStream out) throws IOException;
+    void createSnapshot(OutputStream out) throws IOException;
 
     /**
      * Populate this store with data from the snapshot. Note that this is only allowed if the store is
      * {@link #isEmpty()}.
      */
-    public void loadSnapshot(InputStream in) throws IOException;
+    void loadSnapshot(InputStream in) throws IOException;
 
     /**
      * Save a snapshot. This is a NOP if we are already busy saving a snapshot or if no new transactions have been
      * applied since the most recent snapshot was saved.
      */
-    public void saveSnapshot() throws IOException;
+    void saveSnapshot() throws IOException;
 
     /**
-    * Does this store contain no objects?
-    */
-    public boolean isEmpty();
+     * Does this store contain no objects?
+     */
+    boolean isEmpty();
+
+    /**
+     * Get the names of all of the maps in this store.
+     */
+    List<String> getMapNames();
 
     /**
      * A copy of the data in a data store.
