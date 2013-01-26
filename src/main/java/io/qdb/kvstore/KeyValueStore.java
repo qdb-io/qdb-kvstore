@@ -3,7 +3,6 @@ package io.qdb.kvstore;
 import java.io.*;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 
 /**
@@ -86,13 +85,13 @@ public interface KeyValueStore<K, V> extends Closeable {
      * Receives notification of changes to the store.
      */
     interface Listener<K, V> {
-        void onKeyValueStoreEvent(Event<K, V> ev);
+        void onObjectEvent(ObjectEvent<K, V> ev);
     }
 
     /**
-     * A change to the store.
+     * A data change to a store.
      */
-    public static class Event<K, V> {
+    public static class ObjectEvent<K, V> {
 
         public enum Type { CREATED, UPDATED, DELETED }
 
@@ -102,7 +101,7 @@ public interface KeyValueStore<K, V> extends Closeable {
         public final K key;
         public final V value;
 
-        public Event(KeyValueStore<K, V> store, String map, Type type, K key, V value) {
+        public ObjectEvent(KeyValueStore<K, V> store, String map, Type type, K key, V value) {
             this.store = store;
             this.type = type;
             this.map = map;

@@ -293,6 +293,14 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         // nop unless clustered
     }
 
+    private void dispatch(ObjectEvent<K, V> ev) {
+        try {
+            listener.onObjectEvent(ev);
+        } catch (Exception e) {
+            log.error(e.toString(), e);
+        }
+    }
+
     /**
      * Make changes to our in memory maps based on tx.
      */
@@ -309,9 +317,8 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                     versionProvider.incVersion(tx.value);
                     m.put(tx.key, tx.value);
                     if (listener != null) {
-                        listener.onKeyValueStoreEvent(
-                            new Event<K, V>(this, tx.map, existing == null ? Event.Type.CREATED : Event.Type.UPDATED,
-                                    tx.key, tx.value));
+                        dispatch(new ObjectEvent<K, V>(this, tx.map,
+                                existing == null ? ObjectEvent.Type.CREATED : ObjectEvent.Type.UPDATED, tx.key, tx.value));
                     }
                 }
                 return existing;
@@ -320,11 +327,8 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                 if (m == null) return Boolean.FALSE;
                 versionProvider.incVersion(tx.value);
                 boolean replace = m.replace(tx.key, tx.oldValue, tx.value);
-                if (replace) {
-                    if (listener != null) {
-                        listener.onKeyValueStoreEvent(
-                                new Event<K, V>(this, tx.map, Event.Type.UPDATED, tx.key, tx.value));
-                    }
+                if (replace && listener != null) {
+                    dispatch(new ObjectEvent<K, V>(this, tx.map, ObjectEvent.Type.UPDATED, tx.key, tx.value));
                 }
                 return replace;
 
@@ -333,8 +337,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                 versionProvider.incVersion(tx.value);
                 V v = m.putIfAbsent(tx.key, tx.value);
                 if (v == null && listener != null) {
-                    listener.onKeyValueStoreEvent(
-                            new Event<K, V>(this, tx.map, Event.Type.CREATED, tx.key, tx.value));
+                    dispatch(new ObjectEvent<K, V>(this, tx.map, ObjectEvent.Type.CREATED, tx.key, tx.value));
                 }
                 return v;
 
@@ -343,8 +346,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                 V ans = m.remove(tx.key);
                 if (m.isEmpty()) maps.remove(tx.map);
                 if (ans != null && listener != null) {
-                    listener.onKeyValueStoreEvent(
-                            new Event<K, V>(this, tx.map, Event.Type.DELETED, tx.key, ans));
+                    dispatch(new ObjectEvent<K, V>(this, tx.map, ObjectEvent.Type.DELETED, tx.key, ans));
                 }
                 return ans;
 
@@ -356,8 +358,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                 Boolean removed = m.remove(tx.key, tx.value);
                 if (m.isEmpty()) maps.remove(tx.map);
                 if (removed && listener != null) {
-                    listener.onKeyValueStoreEvent(
-                            new Event<K, V>(this, tx.map, Event.Type.DELETED, tx.key, tx.value));
+                    dispatch(new ObjectEvent<K, V>(this, tx.map, ObjectEvent.Type.DELETED, tx.key, tx.value));
                 }
                 return removed;
         }

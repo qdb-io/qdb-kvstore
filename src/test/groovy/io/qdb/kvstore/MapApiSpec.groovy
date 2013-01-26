@@ -18,8 +18,8 @@ class MapApiSpec extends Specification {
     @Shared Listener listener = new Listener()
 
     static class Listener implements KeyValueStore.Listener<String, ModelObject> {
-        List<KeyValueStore.Event<String, ModelObject>> events = []
-        void onKeyValueStoreEvent(KeyValueStore.Event<String, ModelObject> ev) { events << ev }
+        List<KeyValueStore.ObjectEvent<String, ModelObject>> events = []
+        void onObjectEvent(KeyValueStore.ObjectEvent<String, ModelObject> ev) { events << ev }
     }
 
     def setupSpec() {
@@ -74,7 +74,7 @@ class MapApiSpec extends Specification {
         listener.events.size() == 1
         ev.store == store
         ev.map == "widgets"
-        ev.type == KeyValueStore.Event.Type.CREATED
+        ev.type == KeyValueStore.ObjectEvent.Type.CREATED
         ev.key == "1"
         ev.value.name == "one"
     }
@@ -104,7 +104,7 @@ class MapApiSpec extends Specification {
         listener.events.size() == 1
         ev.store == store
         ev.map == "widgets"
-        ev.type == KeyValueStore.Event.Type.CREATED
+        ev.type == KeyValueStore.ObjectEvent.Type.CREATED
         ev.key == "2"
         ev.value.name == "two"
     }
@@ -125,7 +125,7 @@ class MapApiSpec extends Specification {
         listener.events.size() == 1
         ev.store == store
         ev.map == "widgets"
-        ev.type == KeyValueStore.Event.Type.UPDATED
+        ev.type == KeyValueStore.ObjectEvent.Type.UPDATED
         ev.key == "1"
         ev.value.name == "onexx"
     }
@@ -144,7 +144,7 @@ class MapApiSpec extends Specification {
         listener.events.size() == 1
         ev.store == store
         ev.map == "widgets"
-        ev.type == KeyValueStore.Event.Type.UPDATED
+        ev.type == KeyValueStore.ObjectEvent.Type.UPDATED
         ev.key == "1"
         ev.value.name == "one"
     }
@@ -161,7 +161,7 @@ class MapApiSpec extends Specification {
         listener.events.size() == 1
         ev.store == store
         ev.map == "widgets"
-        ev.type == KeyValueStore.Event.Type.DELETED
+        ev.type == KeyValueStore.ObjectEvent.Type.DELETED
         ev.key == "2"
         ev.value.name == "two"
     }
@@ -188,7 +188,7 @@ class MapApiSpec extends Specification {
         listener.events.size() == 1
         ev.store == store
         ev.map == "widgets"
-        ev.type == KeyValueStore.Event.Type.DELETED
+        ev.type == KeyValueStore.ObjectEvent.Type.DELETED
         ev.key == "2"
         ev.value.name == "two"
     }
@@ -265,7 +265,7 @@ class MapApiSpec extends Specification {
         listener.events.size() == 1
         ev.store == store
         ev.map == "widgets"
-        ev.type == KeyValueStore.Event.Type.DELETED
+        ev.type == KeyValueStore.ObjectEvent.Type.DELETED
         ev.key == "1"
         ev.value.name == "one"
     }
@@ -282,7 +282,7 @@ class MapApiSpec extends Specification {
         listener.events.size() == 1
         ev.store == store
         ev.map == "widgets"
-        ev.type == KeyValueStore.Event.Type.CREATED
+        ev.type == KeyValueStore.ObjectEvent.Type.CREATED
         ev.key == "1"
         ev.value.name == "one"
     }
