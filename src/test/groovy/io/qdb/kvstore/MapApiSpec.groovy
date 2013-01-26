@@ -20,6 +20,7 @@ class MapApiSpec extends Specification {
     static class Listener implements KeyValueStore.Listener<String, ModelObject> {
         List<KeyValueStore.ObjectEvent<String, ModelObject>> events = []
         void onObjectEvent(KeyValueStore.ObjectEvent<String, ModelObject> ev) { events << ev }
+        void onStatusChange(KeyValueStore.Status status) { }
     }
 
     def setupSpec() {
@@ -53,6 +54,11 @@ class MapApiSpec extends Specification {
     def "getStoreId"() {
         expect:
         store.getStoreId() != null
+    }
+
+    def "getStatus"() {
+        expect:
+        store.getStatus() == KeyValueStore.Status.UP
     }
 
     def "put and get"() {

@@ -11,6 +11,18 @@ import java.util.concurrent.ConcurrentMap;
  */
 public interface KeyValueStore<K, V> extends Closeable {
 
+    enum Status { DOWN, READ_ONLY, UP }
+
+    /**
+     * What is the status of this store? Standalone stores are always up.
+     */
+    Status getStatus();
+
+    /**
+     * Get the unique id for this store.
+     */
+    String getStoreId();
+
     /**
      * Get a map for storing objects. It is only actually created when the first object is stored.
      * All methods in the map might throw {@link KeyValueStoreException}.
@@ -51,11 +63,6 @@ public interface KeyValueStore<K, V> extends Closeable {
     List<String> getMapNames();
 
     /**
-     * Get the unique id for this store.
-     */
-    String getStoreId();
-
-    /**
      * A copy of the data in a data store.
      */
     public static class Snapshot<K, V> implements Serializable {
@@ -82,10 +89,21 @@ public interface KeyValueStore<K, V> extends Closeable {
     }
 
     /**
-     * Receives notification of changes to the store.
+     * Receives notification of changes to the store. Extend {@link ListenerAdapter} instead of implementing this
+     * interface directly so your code won't break if new methods are addeded.
      */
     interface Listener<K, V> {
+
+        /** An object has been created, updated or deleted. */
         void onObjectEvent(ObjectEvent<K, V> ev);
+
+        /** The status of the store has changed. */
+        void onStatusChange(Status status);
+    }
+
+    public static class ListenerAdapter<K, V> implements Listener<K, V> {
+        public void onObjectEvent(ObjectEvent<K, V> ev) { }
+        public void onStatusChange(Status status) { }
     }
 
     /**

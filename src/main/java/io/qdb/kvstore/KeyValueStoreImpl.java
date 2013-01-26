@@ -23,11 +23,13 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     private final Serializer serializer;
     private final VersionProvider<V> versionProvider;
     private final Listener<K, V> listener;
+    private final Cluster<KeyValueStoreImpl> cluster;
     private final File dir;
     private final int snapshotCount;
     private final int snapshotIntervalSecs;
     private final Timer snapshotTimer;
 
+    private Status status;
     private String storeId;
     private MessageBuffer txLog;
     private long mostRecentSnapshotId;
@@ -38,10 +40,12 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
 
     @SuppressWarnings("unchecked")
     KeyValueStoreImpl(Serializer serializer, VersionProvider<V> versionProvider, Listener<K, V> listener,
-                File dir, int txLogSizeM, int maxObjectSize, int snapshotCount, int snapshotIntervalSecs)
+                Cluster<KeyValueStoreImpl> cluster, File dir, int txLogSizeM, int maxObjectSize, int snapshotCount,
+                int snapshotIntervalSecs)
             throws IOException {
         this.serializer = serializer;
         this.versionProvider = versionProvider;
+        this.cluster = cluster;
         this.dir = dir;
         this.snapshotCount = snapshotCount;
         this.snapshotIntervalSecs = snapshotIntervalSecs;
@@ -108,6 +112,8 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         this.listener = listener;
 
         snapshotTimer = new Timer("kvstore-snapshot-" + dir.getName(), true);
+
+        cluster.join(this);
     }
 
     private File[] getSnapshotFiles() {
@@ -124,9 +130,21 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    public Status getStatus() {
+        return status;
+    }
+
+    public void setStatus(Status status) {
+        if (this.status != status) {
+            this.status = status;
+        }
+    }
+
+    @Override
     public void close() throws IOException {
         snapshotTimer.cancel();
         txLog.close();
+        cluster.close();
     }
 
     @SuppressWarnings("unchecked")
@@ -244,7 +262,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         }
         byte[] payload = bos.toByteArray();
 
-        propose(tx);
+        cluster.propose(tx);
         appendToTxLog(payload);
         return apply(tx);
     }
@@ -282,15 +300,6 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                 }
             }, asap ? 1L : snapshotIntervalSecs * 1000L);
         }
-    }
-
-    /**
-     * Propose tx as the next transaction to the cluster and return only when it has been accepted or throw a
-     * {@link KeyValueStoreException} otherwise.
-     */
-    @SuppressWarnings("UnusedParameters")
-    private void propose(StoreTx<K, V> tx) {
-        // nop unless clustered
     }
 
     private void dispatch(ObjectEvent<K, V> ev) {

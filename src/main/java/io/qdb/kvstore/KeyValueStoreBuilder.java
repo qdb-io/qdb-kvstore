@@ -1,5 +1,7 @@
 package io.qdb.kvstore;
 
+import io.qdb.kvstore.cluster.ClusterException;
+
 import java.io.File;
 import java.io.IOException;
 
@@ -23,9 +25,10 @@ public class KeyValueStoreBuilder<K, V> {
     public KeyValueStore<K, V> create() throws IOException {
         if (dir == null) throw new IllegalStateException("dir is required");
         if (serializer == null) throw new IllegalStateException("serializer is required");
-        if (versionProvider == null) versionProvider = new NullVersionProvider<V>();
-        return new KeyValueStoreImpl<K, V>(serializer, versionProvider, listener, dir, txLogSizeM, maxObjectSize,
-                snapshotCount, snapshotIntervalSecs);
+        if (versionProvider == null) versionProvider = new NopVersionProvider<V>();
+        Cluster<KeyValueStoreImpl> cluster = new StandaloneCluster();
+        return new KeyValueStoreImpl<K, V>(serializer, versionProvider, listener, cluster, dir,
+                txLogSizeM, maxObjectSize, snapshotCount, snapshotIntervalSecs);
     }
 
     /**
@@ -102,8 +105,14 @@ public class KeyValueStoreBuilder<K, V> {
         return this;
     }
 
-    public static class NullVersionProvider<V> implements KeyValueStore.VersionProvider<V> {
+    private static class NopVersionProvider<V> implements KeyValueStore.VersionProvider<V> {
         public Object getVersion(V value) { return null; }
         public void incVersion(V value) { }
+    }
+
+    private static class StandaloneCluster implements Cluster<KeyValueStoreImpl> {
+        public void join(KeyValueStoreImpl store) { store.setStatus(KeyValueStore.Status.UP); }
+        public void propose(StoreTx tx) throws ClusterException { }
+        public void close() throws IOException { }
     }
 }
