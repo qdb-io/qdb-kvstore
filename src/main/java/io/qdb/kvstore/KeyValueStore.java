@@ -94,7 +94,7 @@ public interface KeyValueStore<K, V> extends Closeable {
      */
     public static class Event<K, V> {
 
-        enum Type { CREATED, UPDATED, DELETED }
+        public enum Type { CREATED, UPDATED, DELETED }
 
         public final KeyValueStore<K, V> store;
         public final String map;
