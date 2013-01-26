@@ -19,6 +19,11 @@ public interface KeyValueStore<K, V> extends Closeable {
     ConcurrentMap<K, V> getMap(String name);
 
     /**
+     * Get a map for storing objects of a particular type. Note that the type restriction isn't enforced.
+     */
+    <T extends V> ConcurrentMap<K, T> getMap(String name, Class<T> cls);
+
+    /**
      * Create a snapshot of our data. This is useful for transferring our state to another KeyValueStore (maybe
      * on a different machine).
      */

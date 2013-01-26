@@ -383,6 +383,12 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         return new Namespace(name);
     }
 
+    @SuppressWarnings("unchecked")
+    @Override
+    public <T extends V> ConcurrentMap<K, T> getMap(String name, Class<T> cls) {
+        return (ConcurrentMap<K, T>)getMap(name);
+    }
+
     @SuppressWarnings({"unchecked", "NullableProblems"})
     public class Namespace implements ConcurrentMap<K, V> {
 

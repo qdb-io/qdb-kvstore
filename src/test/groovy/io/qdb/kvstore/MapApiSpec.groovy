@@ -31,7 +31,7 @@ class MapApiSpec extends Specification {
                 .versionProvider(new VersionProvider())
                 .listener(listener)
                 .create()
-        widgets = store.getMap("widgets")
+        widgets = store.getMap("widgets", ModelObject)
         bugs = store.getMap("bugs")
     }
 
