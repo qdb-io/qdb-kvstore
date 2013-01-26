@@ -52,6 +52,11 @@ public interface KeyValueStore<K, V> extends Closeable {
     List<String> getMapNames();
 
     /**
+     * Get the unique id for this store.
+     */
+    String getStoreId();
+
+    /**
      * A copy of the data in a data store.
      */
     public static class Snapshot<K, V> implements Serializable {

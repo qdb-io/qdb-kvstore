@@ -50,6 +50,11 @@ class MapApiSpec extends Specification {
         widgets.size() == 0
     }
 
+    def "getStoreId"() {
+        expect:
+        store.getStoreId() != null
+    }
+
     def "put and get"() {
         def put = widgets.put("1", new ModelObject("one"))
         def get = widgets.get("1")

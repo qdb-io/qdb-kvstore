@@ -379,6 +379,11 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
+    public String getStoreId() {
+        return storeId;
+    }
+
+    @Override
     public ConcurrentMap<K, V> getMap(String name) {
         return new Namespace(name);
     }
