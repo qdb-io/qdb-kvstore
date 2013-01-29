@@ -1,6 +1,8 @@
 package io.qdb.kvstore;
 
+import io.qdb.kvstore.cluster.Cluster;
 import io.qdb.kvstore.cluster.ClusterException;
+import io.qdb.kvstore.cluster.ClusterMember;
 
 import java.io.File;
 import java.io.IOException;
@@ -19,6 +21,7 @@ public class KeyValueStoreBuilder<K, V> {
     private int maxObjectSize = 100000;
     private int snapshotCount = 3;
     private int snapshotIntervalSecs = 60;
+    private int proposalTimeoutMs = 4000;
 
     public KeyValueStoreBuilder() { }
 
@@ -26,7 +29,7 @@ public class KeyValueStoreBuilder<K, V> {
         if (dir == null) throw new IllegalStateException("dir is required");
         if (serializer == null) throw new IllegalStateException("serializer is required");
         if (versionProvider == null) versionProvider = new NopVersionProvider<V>();
-        Cluster<KeyValueStoreImpl> cluster = new StandaloneCluster();
+        Cluster cluster = new StandaloneCluster();
         return new KeyValueStoreImpl<K, V>(serializer, versionProvider, listener, cluster, dir,
                 txLogSizeM, maxObjectSize, snapshotCount, snapshotIntervalSecs);
     }
@@ -105,14 +108,32 @@ public class KeyValueStoreBuilder<K, V> {
         return this;
     }
 
+    /**
+     * How long should serves in a cluster wait for proposed transactions to be accepted?
+     */
+    public void proposalTimeoutMs(int proposalTimeoutMs) {
+        this.proposalTimeoutMs = proposalTimeoutMs;
+    }
+
     private static class NopVersionProvider<V> implements KeyValueStore.VersionProvider<V> {
         public Object getVersion(V value) { return null; }
         public void incVersion(V value) { }
     }
 
-    private static class StandaloneCluster implements Cluster<KeyValueStoreImpl> {
-        public void join(KeyValueStoreImpl store) { store.setStatus(KeyValueStore.Status.UP); }
-        public void propose(StoreTx tx) throws ClusterException { }
+    private static class StandaloneCluster implements Cluster {
+
+        private ClusterMember store;
+
+        public void rejoin(ClusterMember store) {
+            this.store = store;
+            store.setStatus(KeyValueStore.Status.UP);
+        }
+
+        @SuppressWarnings("unchecked")
+        public Object propose(StoreTx tx) throws ClusterException {
+            return store.appendToTxLogAndApply(tx);
+        }
+
         public void close() throws IOException { }
     }
 }

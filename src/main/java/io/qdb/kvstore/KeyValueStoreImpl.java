@@ -3,6 +3,8 @@ package io.qdb.kvstore;
 import io.qdb.buffer.MessageBuffer;
 import io.qdb.buffer.MessageCursor;
 import io.qdb.buffer.PersistentMessageBuffer;
+import io.qdb.kvstore.cluster.Cluster;
+import io.qdb.kvstore.cluster.ClusterMember;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,18 +18,19 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * KV store implementation. Create these using {@link KeyValueStoreBuilder}.
  */
-public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
+public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V>, ClusterMember {
 
     private static final Logger log = LoggerFactory.getLogger(KeyValueStoreImpl.class);
 
     private final Serializer serializer;
     private final VersionProvider<V> versionProvider;
     private final Listener<K, V> listener;
-    private final Cluster<KeyValueStoreImpl> cluster;
+    private final Cluster cluster;
     private final File dir;
     private final int snapshotCount;
     private final int snapshotIntervalSecs;
     private final Timer snapshotTimer;
+    private final Object proposeLock = new Object();
 
     private Status status;
     private String storeId;
@@ -40,7 +43,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
 
     @SuppressWarnings("unchecked")
     KeyValueStoreImpl(Serializer serializer, VersionProvider<V> versionProvider, Listener<K, V> listener,
-                Cluster<KeyValueStoreImpl> cluster, File dir, int txLogSizeM, int maxObjectSize, int snapshotCount,
+                Cluster cluster, File dir, int txLogSizeM, int maxObjectSize, int snapshotCount,
                 int snapshotIntervalSecs)
             throws IOException {
         this.serializer = serializer;
@@ -113,7 +116,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
 
         snapshotTimer = new Timer("kvstore-snapshot-" + dir.getName(), true);
 
-        cluster.join(this);
+        cluster.rejoin(this);
     }
 
     private File[] getSnapshotFiles() {
@@ -249,11 +252,26 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         }
     }
 
+    public long getNextTxId() throws IOException {
+        return txLog.getNextMessageId();
+    }
+
     /**
-     * Attempt to apply tx. It is first proposed to the cluster (if any) and written to the transaction log and then
-     * applied to our maps.
+     * Attempt to apply tx. It is proposed to the cluster (and hence written to the transaction log) and then applied
+     * to our maps.
      */
-    private synchronized Object exec(StoreTx<K, V> tx) {
+    private Object exec(StoreTx<K, V> tx) {
+        synchronized (this) {
+            if (status != Status.UP) throw new KeyValueStoreException("Store is " + status);
+        }
+        synchronized (proposeLock) {
+            // this will call appendToTxLogAndApply when it is accepted or fail with an exception
+            return cluster.propose(tx);
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public synchronized Object appendToTxLogAndApply(StoreTx tx) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try {
             serializer.serialize(tx, bos);
@@ -262,12 +280,6 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         }
         byte[] payload = bos.toByteArray();
 
-        cluster.propose(tx);
-        appendToTxLog(payload);
-        return apply(tx);
-    }
-
-    private void appendToTxLog(byte[] payload) {
         long timestamp = System.currentTimeMillis();
         boolean snapshotNow = false;
         try {
@@ -281,6 +293,8 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         } finally {
             scheduleSnapshot(snapshotNow);
         }
+
+        return apply(tx);
     }
 
     private synchronized void scheduleSnapshot(boolean asap) {
