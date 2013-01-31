@@ -20,9 +20,10 @@ public class Paxos<N extends Comparable<N>> {
 
     private Object[] nodes;
 
-    private Msg<N>[] promised;        // highest numbered PROMISE received from each node
+    private Msg<N>[] promised;          // highest numbered PROMISE received from each node
     private N highestSeqNoSeen;
     private Object v;
+    private boolean[] accepted;         // node that have sent is accepted messages
 
     public Paxos(Object self, Transport<N> transport, SequenceNoFactory<N> sequenceNoFactory, MsgFactory<N> msgFactory,
                  Listener listener) {
@@ -60,7 +61,6 @@ public class Paxos<N extends Comparable<N>> {
     }
 
     private void send(Msg<N> msg, Object node) {
-        if (log.isDebugEnabled()) log.debug("Sending " + msg + " to " + node);
         transport.send(node, msg, self);
     }
 
@@ -74,8 +74,8 @@ public class Paxos<N extends Comparable<N>> {
             case PREPARE:   onPrepareReceived(from, msg);     break;
             case PROMISE:   onPromiseReceived(from, msg);     break;
             case NACK:      onNackReceived();                 break;
-            case ACCEPT:    onAcceptReceived(msg);            break;
-            case ACCEPTED:  onAcceptedReceived(msg);          break;
+            case ACCEPT:    onAcceptReceived(from, msg);      break;
+            case ACCEPTED:  onAcceptedReceived(from, msg);    break;
             default:
                 throw new IllegalArgumentException("Unknown msg type: " + msg);
         }
@@ -132,9 +132,16 @@ public class Paxos<N extends Comparable<N>> {
                 }
             }
             if (count > nodes.length / 2) {
+                // we have received promises from a majority of servers so send everyone except ourselves accept
+                // messages and wait
                 promised = null;
+                accepted = new boolean[nodes.length];
                 Msg<N> accept = msgFactory.create(Msg.Type.ACCEPT, highest, value, null);
-                for (Object node : nodes) send(accept, node);
+                for (int j = 0; j < nodes.length; j++) {
+                    Object node = nodes[j];
+                    if (node.equals(self)) accepted[j] = true;
+                    else send(accept, node);
+                }
             }
         }
     }
@@ -144,21 +151,44 @@ public class Paxos<N extends Comparable<N>> {
         promised = null;
     }
 
-    private void onAcceptReceived(Msg<N> msg) {
+    private void onAcceptReceived(Object from, Msg<N> msg) {
         // ignore if we have already PROMISEd for a higher sequence no
         if (highestSeqNoSeen != null && highestSeqNoSeen.compareTo(msg.getN()) > 0) return;
 
         highestSeqNoSeen = msg.getN();
         v = msg.getV();
 
-        Msg<N> accepted = msgFactory.create(Msg.Type.ACCEPTED, highestSeqNoSeen, v, null);
-        for (Object node : nodes) send(accepted, node);
+        listener.proposalAccepted(v);
+
+        // let the node we received the message from know that we have accepted it
+        send(msgFactory.create(Msg.Type.ACCEPTED, highestSeqNoSeen, v, null), from);
     }
 
-    private void onAcceptedReceived(Msg<N> msg) {
+    private void onAcceptedReceived(Object from, Msg<N> msg) {
         highestSeqNoSeen = msg.getN();
         v = msg.getV();
-        listener.accepted(v);
+        listener.ourProposalAccepted(v);
+
+        if (accepted == null || msg.getN().compareTo(highestSeqNoSeen) != 0) return;  // old or dup ACCEPTED message
+
+        int i = indexOfNode(from);
+        if (i < 0) {
+            log.warn("ACCEPTED received from " + from + " not known to us, ignoring: " + msg);
+            return;
+        }
+
+        accepted[i] = true;
+
+        // count accepted messages and let our listener know if we have a majority
+        int c = 0;
+        int n = accepted.length / 2;
+        for (i = 0; i < accepted.length; i++) {
+            if (accepted[i] && (++c > n)) {
+                accepted = null;
+                listener.ourProposalAccepted(msg.getV());
+                break;
+            }
+        }
     }
 
     /** Sends messages to nodes asynchronously. */
@@ -171,9 +201,14 @@ public class Paxos<N extends Comparable<N>> {
         public N next(N n);
     }
 
-    /** Notified of the progress of the algorithm and the final result (if any). */
+    /** Notified of the progress of the algorithm and of accepted values. */
     public interface Listener {
-        void accepted(Object v);
+
+        /** We have accepted a proposal from another node. */
+        void proposalAccepted(Object v);
+
+        /** Our proposal has been accepted by a majority of nodes. */
+        void ourProposalAccepted(Object v);
     }
 
     /** Creates messages. */

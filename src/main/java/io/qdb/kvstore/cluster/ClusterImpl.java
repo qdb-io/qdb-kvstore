@@ -19,7 +19,7 @@ public class ClusterImpl implements Cluster {
 
     private static final Logger log = LoggerFactory.getLogger(ClusterImpl.class);
 
-    private final ServerLocator serverRegistry;
+    private final ServerLocator serverLocator;
     private final Transport transport;
     private final int proposalTimeoutMs;
 
@@ -36,8 +36,8 @@ public class ClusterImpl implements Cluster {
     private Object proposalResult;
     private CountDownLatch proposalAccepted;
 
-    public ClusterImpl(EventBus eventBus, ServerLocator serverRegistry, Transport transport, int proposalTimeoutMs) {
-        this.serverRegistry = serverRegistry;
+    public ClusterImpl(EventBus eventBus, ServerLocator serverLocator, Transport transport, int proposalTimeoutMs) {
+        this.serverLocator = serverLocator;
         this.transport = transport;
         this.proposalTimeoutMs = proposalTimeoutMs;
         eventBus.register(this);
@@ -45,7 +45,7 @@ public class ClusterImpl implements Cluster {
 
     @Override
     public void close() throws IOException {
-        serverRegistry.close();
+        serverLocator.close();
         if (proposingThread != null) proposingThread.interrupt();
     }
 
@@ -53,7 +53,7 @@ public class ClusterImpl implements Cluster {
     public synchronized void rejoin(ClusterMember store) {
         if (this.store != null) throw new IllegalStateException("Already have a store: " + this.store);
         this.store = store;
-        serverRegistry.lookForServers();
+        serverLocator.lookForServers();
     }
 
     @SuppressWarnings("unchecked")
@@ -95,6 +95,7 @@ public class ClusterImpl implements Cluster {
             promisesReceived = null;
         }
         // todo restart current proposal if any?
+        // todo if not in cluster already send out join message or dummy tx or something to get highest tx id?
     }
 
     @Subscribe

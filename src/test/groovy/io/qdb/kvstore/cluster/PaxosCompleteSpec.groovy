@@ -13,9 +13,12 @@ class PaxosCompleteSpec extends PaxosNonSharedBase {
         transport.deliver("ACCEPTED")
 
         expect:
-        listener1.accepted == "p1"
-        listener2.accepted == "p1"
-        listener3.accepted == "p1"
+        listener1.ourProposalAccepted == "p1"
+        listener1.proposalAccepted == null
+        listener2.ourProposalAccepted == null
+        listener2.proposalAccepted == "p1"
+        listener3.ourProposalAccepted == null
+        listener3.proposalAccepted == "p1"
     }
 
 }

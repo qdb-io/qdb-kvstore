@@ -42,8 +42,12 @@ class PaxosBase extends Specification {
     }
 
     static class Listener implements Paxos.Listener {
-        Object accepted
-        void accepted(Object v) { this.accepted = v }
+        Object proposalAccepted
+        Object ourProposalAccepted
+
+        void proposalAccepted(Object v) { this.proposalAccepted = v }
+
+        void ourProposalAccepted(Object v) { this.ourProposalAccepted = v }
     }
 
     @Shared Msg.Factory msgFactory = new Msg.Factory()
