@@ -9,7 +9,7 @@ class PaxosPhase1Spec extends PaxosSharedBase {
         s1.propose("p1")
 
         expect:
-        transport.sent() == "PREPARE n=11 v=p1 to 1, PREPARE n=11 v=p1 to 2, PREPARE n=11 v=p1 to 3"
+        transport.sent() == "PREPARE n=11 v=p1 to 2, PREPARE n=11 v=p1 to 3"
     }
 
     def "PROMISE sent when no previous proposal seen"() {

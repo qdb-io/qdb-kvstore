@@ -47,6 +47,7 @@ public class Paxos<N extends Comparable<N>> {
             this.nodes = nodes;
             // todo cancel any election already in progress
             promised = null;
+            accepted = null;
         }
     }
 
@@ -56,8 +57,16 @@ public class Paxos<N extends Comparable<N>> {
     @SuppressWarnings("unchecked")
     public synchronized void propose(Object proposal) {
         this.promised = new Msg[nodes.length];
-        Msg<N> prepare = msgFactory.create(Msg.Type.PREPARE, sequenceNoFactory.next(highestSeqNoSeen), proposal, null);
-        for (Object node : nodes) send(prepare, node);
+        highestSeqNoSeen = sequenceNoFactory.next(highestSeqNoSeen);
+        Msg<N> prepare = msgFactory.create(Msg.Type.PREPARE, highestSeqNoSeen, proposal, null);
+        for (int i = 0; i < nodes.length; i++) {
+            Object node = nodes[i];
+            if (node.equals(self)) {
+                promised[i] = msgFactory.create(Msg.Type.PROMISE, highestSeqNoSeen, proposal, highestSeqNoSeen);
+            } else {
+                send(prepare, node);
+            }
+        }
     }
 
     private void send(Msg<N> msg, Object node) {

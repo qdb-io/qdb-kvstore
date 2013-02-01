@@ -9,13 +9,6 @@ class PaxosPhase2Spec extends PaxosSharedBase {
         s1.propose("p1")
     }
 
-    def "No ACCEPT sent before majority of PROMISE's received"() {
-        s1.onMessageReceived(2, new Msg(Paxos.Msg.Type.PROMISE, 11, "p1", 11))
-
-        expect:
-        transport.sent() == ""
-    }
-
     def "PROMISE from unknown node ignored"() {
         s1.onMessageReceived(4, new Msg(Paxos.Msg.Type.PROMISE, 11, "p1", 11))
 
