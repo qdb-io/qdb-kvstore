@@ -3,16 +3,15 @@ package io.qdb.kvstore.cluster;
 /**
  * For testing Paxos. I had some weird hassles coding this in Groovy which is why it is in Java.
  */
-public class Msg implements Paxos.Msg<Integer> {
+public class Msg implements Paxos.Msg<Integer, String> {
 
     private final Type type;
     private final Integer n;
-    private final Object v;
+    private final String v;
     private final Integer nv;
 
-    public static class Factory implements Paxos.MsgFactory<Integer> {
-        @Override
-        public Paxos.Msg<Integer> create(Type type, Integer n, Object v, Integer nv) {
+    public static class Factory implements Paxos.MsgFactory<Integer, String> {
+        public Paxos.Msg<Integer, String> create(Type type, Integer n, String v, Integer nv) {
             return new Msg(type, n, v, nv);
         }
     }
@@ -21,11 +20,11 @@ public class Msg implements Paxos.Msg<Integer> {
         this(type, n, null, null);
     }
 
-    public Msg(Type type, Integer n, Object v) {
+    public Msg(Type type, Integer n, String v) {
         this(type, n, v, null);
     }
 
-    public Msg(Type type, Integer n, Object v, Integer nv) {
+    public Msg(Type type, Integer n, String v, Integer nv) {
         this.type = type;
         this.n = n;
         this.v = v;
@@ -40,7 +39,7 @@ public class Msg implements Paxos.Msg<Integer> {
         return n;
     }
 
-    public Object getV() {
+    public String getV() {
         return v;
     }
 

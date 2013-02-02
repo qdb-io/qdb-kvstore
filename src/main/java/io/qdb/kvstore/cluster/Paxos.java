@@ -8,25 +8,26 @@ import java.util.Arrays;
 /**
  * Paxos implementation. This is independent of the msg transport and the sequence number implementation.
  */
-public class Paxos<N extends Comparable<N>> {
+public class Paxos<N extends Comparable<N>, V> {
 
     private static final Logger log = LoggerFactory.getLogger(Paxos.class);
 
     private final Object self;
-    private final Transport<N> transport;
+    private final Transport<N, V> transport;
     private final SequenceNoFactory<N> sequenceNoFactory;
-    private final MsgFactory<N> msgFactory;
-    private final Listener listener;
+    private final MsgFactory<N, V> msgFactory;
+    private final Listener<V> listener;
 
     private Object[] nodes;
 
-    private Msg<N>[] promised;          // highest numbered PROMISE received from each node
+    private V ourProposal;
+    private Msg<N, V>[] promised;          // highest numbered PROMISE received from each node
     private N highestSeqNoSeen;
-    private Object v;
+    private V v;
     private boolean[] accepted;         // node that have sent is accepted messages
 
-    public Paxos(Object self, Transport<N> transport, SequenceNoFactory<N> sequenceNoFactory, MsgFactory<N> msgFactory,
-                 Listener listener) {
+    public Paxos(Object self, Transport<N, V> transport, SequenceNoFactory<N> sequenceNoFactory,
+                 MsgFactory<N, V> msgFactory, Listener<V> listener) {
         this.self = self;
         this.transport = transport;
         this.sequenceNoFactory = sequenceNoFactory;
@@ -55,10 +56,11 @@ public class Paxos<N extends Comparable<N>> {
      * Start the Paxos algorithm. Any election already in progress is restarted.
      */
     @SuppressWarnings("unchecked")
-    public synchronized void propose(Object proposal) {
+    public synchronized void propose(V proposal) {
+        this.ourProposal = proposal;
         this.promised = new Msg[nodes.length];
         highestSeqNoSeen = sequenceNoFactory.next(highestSeqNoSeen);
-        Msg<N> prepare = msgFactory.create(Msg.Type.PREPARE, highestSeqNoSeen, proposal, null);
+        Msg<N, V> prepare = msgFactory.create(Msg.Type.PREPARE, highestSeqNoSeen, proposal, null);
         for (int i = 0; i < nodes.length; i++) {
             Object node = nodes[i];
             if (node.equals(self)) {
@@ -69,7 +71,7 @@ public class Paxos<N extends Comparable<N>> {
         }
     }
 
-    private void send(Msg<N> msg, Object node) {
+    private void send(Msg<N, V> msg, Object node) {
         transport.send(node, msg, self);
     }
 
@@ -77,7 +79,7 @@ public class Paxos<N extends Comparable<N>> {
      * A message has been received from another Node.
      */
     @SuppressWarnings("StatementWithEmptyBody")
-    public synchronized void onMessageReceived(Object from, Msg<N> msg) {
+    public synchronized void onMessageReceived(Object from, Msg<N, V> msg) {
         if (log.isDebugEnabled()) log.debug("Received " + msg + "  from " + from);
         switch (msg.getType()) {
             case PREPARE:   onPrepareReceived(from, msg);     break;
@@ -97,7 +99,7 @@ public class Paxos<N extends Comparable<N>> {
         return -1;
     }
 
-    private void onPrepareReceived(Object from, Msg<N> msg) {
+    private void onPrepareReceived(Object from, Msg<N, V> msg) {
         N n = msg.getN();
         if (highestSeqNoSeen == null) {
             // haven't seen any proposals so accept this one
@@ -111,13 +113,13 @@ public class Paxos<N extends Comparable<N>> {
 
         } else {
             // proposal has higher sequence so send back previous highest sequence and it's proposal
-            Msg<N> ack = msgFactory.create(Msg.Type.PROMISE, n, v, highestSeqNoSeen);
+            Msg<N, V> ack = msgFactory.create(Msg.Type.PROMISE, n, v, highestSeqNoSeen);
             highestSeqNoSeen = n;
             send(ack, from);
         }
     }
 
-    private void onPromiseReceived(Object from, Msg<N> msg) {
+    private void onPromiseReceived(Object from, Msg<N, V> msg) {
         int i = indexOfNode(from);
         if (i < 0) {
             log.warn("PROMISE received from node " + from + " not known to us, ignoring: " + msg);
@@ -125,14 +127,14 @@ public class Paxos<N extends Comparable<N>> {
         }
         if (promised == null) return;  // ACCEPT already sent or proposal abandoned
 
-        Msg<N> prev = promised[i];
+        Msg<N, V> prev = promised[i];
         if (prev == null || prev.getN().compareTo(msg.getN()) < 0) {
             promised[i] = msg;
             // see if we have a majority of PROMISEs + find the most recent (in proposal number ordering) value
             N highest = null;
-            Object value = null;
+            V value = null;
             int count = 0;
-            for (Msg<N> m : promised) {
+            for (Msg<N, V> m : promised) {
                 if (m == null || m.getV() == null) continue;
                 ++count;
                 if (highest == null || highest.compareTo(m.getNv()) < 0) {
@@ -145,7 +147,7 @@ public class Paxos<N extends Comparable<N>> {
                 // messages and wait
                 promised = null;
                 accepted = new boolean[nodes.length];
-                Msg<N> accept = msgFactory.create(Msg.Type.ACCEPT, highest, value, null);
+                Msg<N, V> accept = msgFactory.create(Msg.Type.ACCEPT, highest, value, null);
                 for (int j = 0; j < nodes.length; j++) {
                     Object node = nodes[j];
                     if (node.equals(self)) accepted[j] = true;
@@ -156,11 +158,15 @@ public class Paxos<N extends Comparable<N>> {
     }
 
     private void onNackReceived() {
-        // abandon our proposal
-        promised = null;
+        if (promised != null) {     // abandon our proposal
+            promised = null;
+            V copy = ourProposal;
+            ourProposal = null;
+            listener.ourProposalRejected(copy);
+        }
     }
 
-    private void onAcceptReceived(Object from, Msg<N> msg) {
+    private void onAcceptReceived(Object from, Msg<N, V> msg) {
         // ignore if we have already PROMISEd for a higher sequence no
         if (highestSeqNoSeen != null && highestSeqNoSeen.compareTo(msg.getN()) > 0) return;
 
@@ -173,7 +179,7 @@ public class Paxos<N extends Comparable<N>> {
         send(msgFactory.create(Msg.Type.ACCEPTED, highestSeqNoSeen, v, null), from);
     }
 
-    private void onAcceptedReceived(Object from, Msg<N> msg) {
+    private void onAcceptedReceived(Object from, Msg<N, V> msg) {
         highestSeqNoSeen = msg.getN();
         v = msg.getV();
         listener.ourProposalAccepted(v);
@@ -201,8 +207,8 @@ public class Paxos<N extends Comparable<N>> {
     }
 
     /** Sends messages to nodes asynchronously. */
-    public interface Transport<N extends Comparable<N>> {
-        void send(Object to, Msg<N> msg, Object from);
+    public interface Transport<N extends Comparable<N>, V> {
+        void send(Object to, Msg<N, V> msg, Object from);
     }
 
     public interface SequenceNoFactory<N extends Comparable<N>> {
@@ -211,25 +217,28 @@ public class Paxos<N extends Comparable<N>> {
     }
 
     /** Notified of the progress of the algorithm and of accepted values. */
-    public interface Listener {
+    public interface Listener<V> {
 
         /** We have accepted a proposal from another node. */
-        void proposalAccepted(Object v);
+        void proposalAccepted(V v);
 
         /** Our proposal has been accepted by a majority of nodes. */
-        void ourProposalAccepted(Object v);
+        void ourProposalAccepted(V v);
+
+        /** Our proposal has been rejected. */
+        void ourProposalRejected(V v);
     }
 
     /** Creates messages. */
-    public interface MsgFactory<N extends Comparable<N>> {
-        Msg<N> create(Msg.Type type, N n, Object v, N nv);
+    public interface MsgFactory<N extends Comparable<N>, V> {
+        Msg<N, V> create(Msg.Type type, N n, V v, N nv);
     }
 
-    public interface Msg<N extends Comparable> {
+    public interface Msg<N extends Comparable, V> {
         enum Type { PREPARE, PROMISE, NACK, ACCEPT, ACCEPTED }
         public Type getType();
         public N getN();
-        public Object getV();
+        public V getV();
         public N getNv();
     }
 }

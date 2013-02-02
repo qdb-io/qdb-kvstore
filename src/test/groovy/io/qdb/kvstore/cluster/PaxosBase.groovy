@@ -41,13 +41,14 @@ class PaxosBase extends Specification {
         Integer next(Integer n) { return (n == null ? 10 : n - (n % 10)) + serverNo }
     }
 
-    static class Listener implements Paxos.Listener {
-        Object proposalAccepted
-        Object ourProposalAccepted
+    static class Listener implements Paxos.Listener<String> {
+        String proposalAccepted
+        String ourProposalAccepted
+        String ourProposalRejected
 
-        void proposalAccepted(Object v) { this.proposalAccepted = v }
-
-        void ourProposalAccepted(Object v) { this.ourProposalAccepted = v }
+        void proposalAccepted(String v) { proposalAccepted = v }
+        void ourProposalAccepted(String v) { ourProposalAccepted = v }
+        void ourProposalRejected(String v) { ourProposalRejected = v }
     }
 
     @Shared Msg.Factory msgFactory = new Msg.Factory()
