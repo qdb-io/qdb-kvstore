@@ -48,7 +48,7 @@ class PaxosBase extends Specification {
 
         void proposalAccepted(String v) { proposalAccepted = v }
         void ourProposalAccepted(String v) { ourProposalAccepted = v }
-        void ourProposalRejected(String v) { ourProposalRejected = v }
+        void ourProposalRejected(String v, N n, Object from) { ourProposalRejected = v }
     }
 
     @Shared Msg.Factory msgFactory = new Msg.Factory()

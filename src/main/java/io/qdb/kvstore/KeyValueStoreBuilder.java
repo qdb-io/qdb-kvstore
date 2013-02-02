@@ -1,11 +1,16 @@
 package io.qdb.kvstore;
 
+import com.google.common.eventbus.EventBus;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.qdb.kvstore.cluster.Cluster;
 import io.qdb.kvstore.cluster.ClusterException;
+import io.qdb.kvstore.cluster.ClusterImpl;
 import io.qdb.kvstore.cluster.ClusterMember;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * Helps create a DataStore instance. This makes it possible for the data store to receive all its configuration
@@ -21,6 +26,9 @@ public class KeyValueStoreBuilder<K, V> {
     private int maxObjectSize = 100000;
     private int snapshotCount = 3;
     private int snapshotIntervalSecs = 60;
+
+    private EventBus eventBus;
+    private ExecutorService executorService;
     private int proposalTimeoutMs = 4000;
 
     public KeyValueStoreBuilder() { }
@@ -29,7 +37,23 @@ public class KeyValueStoreBuilder<K, V> {
         if (dir == null) throw new IllegalStateException("dir is required");
         if (serializer == null) throw new IllegalStateException("serializer is required");
         if (versionProvider == null) versionProvider = new NopVersionProvider<V>();
-        Cluster cluster = new StandaloneCluster();
+
+        Cluster cluster;
+        if (true) {
+            if (eventBus == null) {
+                eventBus = new EventBus();
+            }
+            if (executorService == null)  {
+                executorService = Executors.newCachedThreadPool(
+                    new ThreadFactoryBuilder().setNameFormat("qdb-kvstore-%d").setUncaughtExceptionHandler(this).build());
+            }
+            cluster = new ClusterImpl(eventBus, executorService, )
+        } else {
+            cluster = new StandaloneCluster();
+        }
+
+        // todo use executor service instead of timer for KeyValueStoreImpl as well
+
         return new KeyValueStoreImpl<K, V>(serializer, versionProvider, listener, cluster, dir,
                 txLogSizeM, maxObjectSize, snapshotCount, snapshotIntervalSecs);
     }
@@ -124,14 +148,21 @@ public class KeyValueStoreBuilder<K, V> {
 
         private ClusterMember store;
 
-        public void rejoin(ClusterMember store) {
+        public void init(ClusterMember store) {
             this.store = store;
-            store.setStatus(KeyValueStore.Status.UP);
+        }
+
+        public KeyValueStore.Status getStoreStatus() {
+            return KeyValueStore.Status.UP;
         }
 
         @SuppressWarnings("unchecked")
         public Object propose(StoreTx tx) throws ClusterException {
-            return store.appendToTxLogAndApply(tx);
+            try {
+                return store.appendToTxLogAndApply(tx);
+            } catch (IOException e) {
+                throw new KeyValueStoreException(e.toString(), e);
+            }
         }
 
         public void close() throws IOException { }

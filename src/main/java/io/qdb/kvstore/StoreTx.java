@@ -7,7 +7,7 @@ import java.io.Serializable;
  */
 public class StoreTx<K, V> implements Serializable {
 
-    enum Operation { PUT, REMOVE, PUT_IF_ABSENT, REMOVE_KV, REPLACE, REPLACE_KVV }
+    public enum Operation { NOP, PUT, REMOVE, PUT_IF_ABSENT, REMOVE_KV, REPLACE, REPLACE_KVV }
 
     public String map;
     public Operation op;

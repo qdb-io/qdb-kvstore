@@ -15,7 +15,27 @@ public class ClusterException extends KeyValueStoreException {
         super(message, cause);
     }
 
-    public ClusterException(Throwable cause) {
-        super(cause);
+    public static class Timeout extends ClusterException {
+        public Timeout(String message) {
+            super(message);
+        }
+    }
+
+    public static class Interrupted extends ClusterException {
+        public Interrupted(String message) {
+            super(message);
+        }
+    }
+
+    public static class OutOfSync extends ClusterException {
+
+        public final String from;
+        public final long txId;
+
+        public OutOfSync(String message, String from, long txId) {
+            super(message);
+            this.from = from;
+            this.txId = txId;
+        }
     }
 }

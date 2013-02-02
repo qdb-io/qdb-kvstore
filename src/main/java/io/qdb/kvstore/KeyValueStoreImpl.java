@@ -30,9 +30,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V>, ClusterMemb
     private final int snapshotCount;
     private final int snapshotIntervalSecs;
     private final Timer snapshotTimer;
-    private final Object proposeLock = new Object();
 
-    private Status status;
     private String storeId;
     private MessageBuffer txLog;
     private long mostRecentSnapshotId;
@@ -116,7 +114,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V>, ClusterMemb
 
         snapshotTimer = new Timer("kvstore-snapshot-" + dir.getName(), true);
 
-        cluster.rejoin(this);
+        cluster.init(this);
     }
 
     private File[] getSnapshotFiles() {
@@ -134,13 +132,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V>, ClusterMemb
 
     @Override
     public Status getStatus() {
-        return status;
-    }
-
-    public void setStatus(Status status) {
-        if (this.status != status) {
-            this.status = status;
-        }
+        return cluster.getStoreStatus();
     }
 
     @Override
@@ -258,26 +250,21 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V>, ClusterMemb
 
     /**
      * Attempt to apply tx. It is proposed to the cluster (and hence written to the transaction log) and then applied
-     * to our maps.
+     * to our maps. <b>This method must not be synchronized.</b>
      */
     private Object exec(StoreTx<K, V> tx) {
         synchronized (this) {
+            Status status = getStatus();
             if (status != Status.UP) throw new KeyValueStoreException("Store is " + status);
         }
-        synchronized (proposeLock) {
-            // this will call appendToTxLogAndApply when it is accepted or fail with an exception
-            return cluster.propose(tx);
-        }
+        // this will call appendToTxLogAndApply when it is accepted or fail with an exception
+        return cluster.propose(tx);
     }
 
     @SuppressWarnings("unchecked")
-    public synchronized Object appendToTxLogAndApply(StoreTx tx) {
+    public synchronized Object appendToTxLogAndApply(StoreTx tx) throws IOException {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
-        try {
-            serializer.serialize(tx, bos);
-        } catch (IOException e) {
-            throw new KeyValueStoreException(e);
-        }
+        serializer.serialize(tx, bos);
         byte[] payload = bos.toByteArray();
 
         long timestamp = System.currentTimeMillis();
@@ -287,9 +274,6 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V>, ClusterMemb
             // the bytes calculation isn't perfectly accurate but good enough
             long bytes = (txId + payload.length) - mostRecentSnapshotId;
             snapshotNow = bytes > txLog.getMaxSize() / 2; // half our log space is gone so do a snapshot now
-        } catch (IOException e) {
-            throw new KeyValueStoreException("Error appending to txLog: " + e, e);
-            // todo we should go offline if we cannot write to our tx log
         } finally {
             scheduleSnapshot(snapshotNow);
         }
@@ -331,6 +315,9 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V>, ClusterMemb
         ConcurrentMap<K, V> m = maps.get(tx.map);
         V existing;
         switch (tx.op) {
+            case NOP:
+                return null;
+
             case PUT:
             case REPLACE:
                 existing = m != null ? m.get(tx.key) : null;

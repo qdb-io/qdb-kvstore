@@ -14,20 +14,25 @@ import java.util.concurrent.ConcurrentMap;
 public interface ClusterMember {
 
     /**
-     * Change the status of the store. The clustering code knows when it should be up etc and must call this whenever
-     * that changes.
-     */
-    public void setStatus(KeyValueStore.Status status);
-
-    /**
      * What will the id of the next tx appended to the tx log be?
      */
-    public long getNextTxId() throws IOException;
+    long getNextTxId() throws IOException;
 
     /**
      * Append tx to the tx log and apply it to the in memory maps. This is called when the cluster has accepted
      * a transaction (either one we have proposed or one from another server).
      */
-    public Object appendToTxLogAndApply(StoreTx tx);
+    Object appendToTxLogAndApply(StoreTx tx) throws IOException;
+
+    /**
+     * Populate this store with data from the snapshot. Note that this is only allowed if the store is
+     * {@link #isEmpty()}.
+     */
+    void loadSnapshot(InputStream in) throws IOException;
+
+    /**
+     * Does this store contain no objects?
+     */
+    boolean isEmpty();
 
 }

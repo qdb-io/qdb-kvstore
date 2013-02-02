@@ -1,5 +1,6 @@
 package io.qdb.kvstore.cluster;
 
+import io.qdb.kvstore.KeyValueStore;
 import io.qdb.kvstore.StoreTx;
 import java.io.Closeable;
 
@@ -9,11 +10,16 @@ import java.io.Closeable;
 public interface Cluster extends Closeable {
 
     /**
+     * The store calls this to figure out what its status is.
+     */
+    public KeyValueStore.Status getStoreStatus();
+
+    /**
      * The store wants to re-join the cluster i.e. it must already be known to be part of the cluster by the other
      * servers. This method starts the join process asynchronously. It should update the status of the store to UP
-     * when the store has joined the cluster.
+     * when the store has joined the cluster. This method is only called once during store startup.
      */
-    void rejoin(ClusterMember store);
+    void init(ClusterMember store);
 
     /**
      * The store has proposed a transaction to the cluster. This method must block until the transaction has been
