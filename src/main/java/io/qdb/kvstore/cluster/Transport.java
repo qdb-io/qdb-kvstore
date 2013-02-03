@@ -6,7 +6,8 @@ import java.io.IOException;
 import java.io.InputStream;
 
 /**
- * Sends messages to servers in our cluster.
+ * Sends messages to servers in our cluster. Messages received from other servers must be posted on the shared
+ * event bus as {@link MessageReceived} events.
  */
 public interface Transport {
 

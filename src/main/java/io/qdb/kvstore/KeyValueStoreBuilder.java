@@ -2,10 +2,9 @@ package io.qdb.kvstore;
 
 import com.google.common.eventbus.EventBus;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import io.qdb.kvstore.cluster.Cluster;
-import io.qdb.kvstore.cluster.ClusterException;
-import io.qdb.kvstore.cluster.ClusterImpl;
-import io.qdb.kvstore.cluster.ClusterMember;
+import io.qdb.kvstore.cluster.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -18,6 +17,8 @@ import java.util.concurrent.Executors;
  */
 public class KeyValueStoreBuilder<K, V> {
 
+    private static final Logger log = LoggerFactory.getLogger(KeyValueStoreBuilder.class);
+
     private File dir;
     private KeyValueStore.Serializer serializer;
     private KeyValueStore.VersionProvider<V> versionProvider;
@@ -29,6 +30,8 @@ public class KeyValueStoreBuilder<K, V> {
 
     private EventBus eventBus;
     private ExecutorService executorService;
+    private ServerLocator serverLocator;
+    private Transport transport;
     private int proposalTimeoutMs = 4000;
 
     public KeyValueStoreBuilder() { }
@@ -39,15 +42,16 @@ public class KeyValueStoreBuilder<K, V> {
         if (versionProvider == null) versionProvider = new NopVersionProvider<V>();
 
         Cluster cluster;
-        if (true) {
-            if (eventBus == null) {
-                eventBus = new EventBus();
-            }
+        if (serverLocator != null || transport != null) {
+            if (serverLocator == null) throw new IllegalStateException("serverLocator is required");
+            if (transport == null) throw new IllegalStateException("transport is required");
+            if (eventBus == null) throw new IllegalStateException("eventBus is required");
             if (executorService == null)  {
                 executorService = Executors.newCachedThreadPool(
-                    new ThreadFactoryBuilder().setNameFormat("qdb-kvstore-%d").setUncaughtExceptionHandler(this).build());
+                    new ThreadFactoryBuilder().setNameFormat("qdb-kvstore-%d")
+                            .setUncaughtExceptionHandler(new UncaughtHandler()).build());
             }
-            cluster = new ClusterImpl(eventBus, executorService, )
+            cluster = new ClusterImpl(eventBus, executorService, serverLocator, transport, proposalTimeoutMs);
         } else {
             cluster = new StandaloneCluster();
         }
@@ -135,8 +139,44 @@ public class KeyValueStoreBuilder<K, V> {
     /**
      * How long should serves in a cluster wait for proposed transactions to be accepted?
      */
-    public void proposalTimeoutMs(int proposalTimeoutMs) {
+    public KeyValueStoreBuilder proposalTimeoutMs(int proposalTimeoutMs) {
         this.proposalTimeoutMs = proposalTimeoutMs;
+        return this;
+    }
+
+    /**
+     * Set event bus use for communication between cluster components. Only required for clustered deployment.
+     * The {@link #serverLocator} and {@link Transport} must be hooked up to this bus.
+     */
+    public KeyValueStoreBuilder eventBus(EventBus eventBus) {
+        this.eventBus = eventBus;
+        return this;
+    }
+
+    /**
+     * Set thread pool that used for background tasks. A default pool is created if none is set.
+     */
+    public KeyValueStoreBuilder executorService(ExecutorService executorService) {
+        this.executorService = executorService;
+        return this;
+    }
+
+    /**
+     * The server locator is required for clustering and is responsible for discovering whuch servers are in the
+     * cluster.
+     */
+    public KeyValueStoreBuilder serverLocator(ServerLocator serverLocator) {
+        this.serverLocator = serverLocator;
+        return this;
+    }
+
+    /**
+     * The transport is required for clustering and is responsible for sending messages to and receiving messages
+     * from other servers in the cluster.
+     */
+    public KeyValueStoreBuilder transport(Transport transport) {
+        this.transport = transport;
+        return this;
     }
 
     private static class NopVersionProvider<V> implements KeyValueStore.VersionProvider<V> {
@@ -166,5 +206,12 @@ public class KeyValueStoreBuilder<K, V> {
         }
 
         public void close() throws IOException { }
+    }
+
+    private static class UncaughtHandler implements Thread.UncaughtExceptionHandler {
+        @Override
+        public void uncaughtException(Thread t, Throwable e) {
+            log.error(e.toString(), e);
+        }
     }
 }
