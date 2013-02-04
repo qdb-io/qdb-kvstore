@@ -19,7 +19,7 @@ public interface Transport {
     /**
      * Send a message to the server asynchronously.
      */
-    void send(String to, Paxos.Msg<SequenceNo, StoreTx> msg);
+    void send(String to, Message msg);
 
     /**
      * Read the latest snapshot the server has.

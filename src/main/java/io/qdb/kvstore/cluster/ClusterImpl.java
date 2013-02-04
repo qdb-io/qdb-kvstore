@@ -45,7 +45,7 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
 
         Paxos.Transport<SequenceNo, StoreTx> pt = new Paxos.Transport<SequenceNo, StoreTx>() {
             public void send(Object to, Paxos.Msg<SequenceNo, StoreTx> msg, Object from) {
-                ClusterImpl.this.transport.send((String) to, msg);
+                ClusterImpl.this.transport.send((String) to, (Message)msg);
             }
         };
 
