@@ -1,9 +1,8 @@
 package io.qdb.kvstore.cluster;
 
-import io.qdb.kvstore.StoreTx;
-
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Iterator;
 
 /**
  * Sends messages to servers in our cluster. Messages received from other servers must be posted on the shared
@@ -29,21 +28,6 @@ public interface Transport {
     /**
      * Stream transactions since txId from the server.
      */
-    StoreTxIterator getTransactionsFrom(String from, long txId) throws IOException;
+    Iterator<StoreTxAndId> getTransactionsFrom(String from, long txId) throws IOException;
 
-    public interface StoreTxIterator {
-        /** Get the next transaction or null if there are no more. */
-        StoreTxAndId next() throws IOException;
-    }
-
-    public static class StoreTxAndId {
-
-        public final long txId;
-        public final StoreTx storeTx;
-
-        public StoreTxAndId(long txId, StoreTx storeTx) {
-            this.txId = txId;
-            this.storeTx = storeTx;
-        }
-    }
 }

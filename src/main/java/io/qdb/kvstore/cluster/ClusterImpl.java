@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -140,8 +141,8 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
             if (store.isEmpty()) {  // load a snapshot
                 store.loadSnapshot(transport.getLatestSnapshotFrom(server));
             } else {                // stream transactions
-                Transport.StoreTxIterator i = transport.getTransactionsFrom(server, store.getNextTxId());
-                for (Transport.StoreTxAndId tx; (tx = i.next()) != null; ) {
+                for (Iterator<StoreTxAndId> i = transport.getTransactionsFrom(server, store.getNextTxId()); i.hasNext(); ) {
+                    StoreTxAndId tx = i.next();
                     // we might accept the next transaction via Paxos before getting it from the stream in which
                     // case it will already have been appended so check for this
                     synchronized (this) {
