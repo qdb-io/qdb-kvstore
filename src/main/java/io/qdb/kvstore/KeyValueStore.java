@@ -1,5 +1,7 @@
 package io.qdb.kvstore;
 
+import io.qdb.kvstore.cluster.StoreTxAndId;
+
 import java.io.*;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +63,11 @@ public interface KeyValueStore<K, V> extends Closeable {
      * Get the names of all of the maps in this store.
      */
     List<String> getMapNames();
+
+    /**
+     * Get store transactions. This is used to supply transactions to another server in the cluster.
+     */
+    StoreTxAndId.Iter getTransactions(long fromTxId) throws IOException;
 
     /**
      * A copy of the data in a data store.

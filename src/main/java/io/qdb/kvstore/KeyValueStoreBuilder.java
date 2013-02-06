@@ -186,9 +186,9 @@ public class KeyValueStoreBuilder<K, V> {
 
     private static class StandaloneCluster implements Cluster {
 
-        private ClusterMember store;
+        private ClusteredKeyValueStore store;
 
-        public void init(ClusterMember store) {
+        public void init(ClusteredKeyValueStore store) {
             this.store = store;
         }
 

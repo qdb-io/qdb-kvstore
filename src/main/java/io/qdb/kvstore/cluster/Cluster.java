@@ -19,12 +19,12 @@ public interface Cluster extends Closeable {
      * servers. This method starts the join process asynchronously. It should update the status of the store to UP
      * when the store has joined the cluster. This method is only called once during store startup.
      */
-    void init(ClusterMember store);
+    void init(ClusteredKeyValueStore store);
 
     /**
      * The store has proposed a transaction to the cluster. This method must block until the transaction has been
      * accepted by the other servers in the cluster in which case it must call
-     * {@link ClusterMember#appendToTxLogAndApply(io.qdb.kvstore.StoreTx)} and return the result. The
+     * {@link ClusteredKeyValueStore#appendToTxLogAndApply(io.qdb.kvstore.StoreTx)} and return the result. The
      * store will only propose one tx at a time i.e. there are no parallel proposals.
      */
     Object propose(StoreTx tx) throws ClusterException;

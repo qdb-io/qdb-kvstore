@@ -27,7 +27,7 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
     private final Paxos<SequenceNo, StoreTx> paxos;
     private final Object proposeLock = new Object();
 
-    private ClusterMember store;
+    private ClusteredKeyValueStore store;
     private Status status = Status.DISCONNECTED;
 
     private Thread proposingThread;
@@ -64,7 +64,7 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
     }
 
     @Override
-    public synchronized void init(ClusterMember store) {
+    public synchronized void init(ClusteredKeyValueStore store) {
         if (this.store != null) throw new IllegalStateException("Already have a store: " + this.store);
         this.store = store;
         serverLocator.lookForServers();

@@ -4,8 +4,7 @@ import io.qdb.buffer.MessageBuffer;
 import io.qdb.buffer.MessageCursor;
 import io.qdb.buffer.PersistentMessageBuffer;
 import io.qdb.kvstore.cluster.Cluster;
-import io.qdb.kvstore.cluster.ClusterException;
-import io.qdb.kvstore.cluster.ClusterMember;
+import io.qdb.kvstore.cluster.ClusteredKeyValueStore;
 import io.qdb.kvstore.cluster.StoreTxAndId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,7 +19,7 @@ import java.util.concurrent.ConcurrentMap;
 /**
  * KV store implementation. Create these using {@link KeyValueStoreBuilder}.
  */
-public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V>, ClusterMember {
+public class KeyValueStoreImpl<K, V> implements ClusteredKeyValueStore<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(KeyValueStoreImpl.class);
 
