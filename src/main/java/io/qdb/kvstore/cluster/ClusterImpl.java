@@ -8,7 +8,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.util.Iterator;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -141,19 +140,23 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
             if (store.isEmpty()) {  // load a snapshot
                 store.loadSnapshot(transport.getLatestSnapshotFrom(server));
             } else {                // stream transactions
-                for (Iterator<StoreTxAndId> i = transport.getTransactionsFrom(server, store.getNextTxId()); i.hasNext(); ) {
-                    StoreTxAndId tx = i.next();
-                    // we might accept the next transaction via Paxos before getting it from the stream in which
-                    // case it will already have been appended so check for this
-                    synchronized (this) {
-                        long expectedTxId = store.getNextTxId();
-                        if (expectedTxId == tx.txId) {
-                            store.appendToTxLogAndApply(tx.storeTx);
-                        } else {
-                            log.info("Synced tx from " + server + " has txId 0x" + Long.toHexString(tx.txId) + " but we " +
-                                    "are expecting 0x" + Long.toHexString(expectedTxId) + ", ending sync");
+                StoreTxAndId.Iter i = transport.getTransactionsFrom(server, store.getNextTxId());
+                try {
+                    for (StoreTxAndId tx; (tx = i.next()) != null; ) {
+                        // we might accept the next transaction via Paxos before getting it from the stream in which
+                        // case it will already have been appended so check for this
+                        synchronized (this) {
+                            long expectedTxId = store.getNextTxId();
+                            if (expectedTxId == tx.txId) {
+                                store.appendToTxLogAndApply(tx.storeTx);
+                            } else {
+                                log.info("Synced tx from " + server + " has txId 0x" + Long.toHexString(tx.txId) + " but we " +
+                                        "are expecting 0x" + Long.toHexString(expectedTxId) + ", ending sync");
+                            }
                         }
                     }
+                } finally {
+                    i.close();
                 }
             }
         } catch (IOException e) {

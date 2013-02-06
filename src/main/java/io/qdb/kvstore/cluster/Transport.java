@@ -28,6 +28,6 @@ public interface Transport {
     /**
      * Stream transactions since txId from the server.
      */
-    Iterator<StoreTxAndId> getTransactionsFrom(String from, long txId) throws IOException;
+    StoreTxAndId.Iter getTransactionsFrom(String from, long txId) throws IOException;
 
 }

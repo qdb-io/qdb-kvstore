@@ -4,6 +4,7 @@ import io.qdb.kvstore.KeyValueStore;
 import io.qdb.kvstore.StoreTx;
 
 import java.io.*;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentMap;
@@ -34,5 +35,10 @@ public interface ClusterMember {
      * Does this store contain no objects?
      */
     boolean isEmpty();
+
+    /**
+     * Get store transactions. This is used to supply transactions to another server in the cluster.
+     */
+    StoreTxAndId.Iter getTransactions(long fromTxId) throws IOException;
 
 }

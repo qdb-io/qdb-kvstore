@@ -4,7 +4,9 @@ import io.qdb.buffer.MessageBuffer;
 import io.qdb.buffer.MessageCursor;
 import io.qdb.buffer.PersistentMessageBuffer;
 import io.qdb.kvstore.cluster.Cluster;
+import io.qdb.kvstore.cluster.ClusterException;
 import io.qdb.kvstore.cluster.ClusterMember;
+import io.qdb.kvstore.cluster.StoreTxAndId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -298,6 +300,26 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V>, ClusterMemb
                 }
             }, asap ? 1L : snapshotIntervalSecs * 1000L);
         }
+    }
+
+    @Override
+    public StoreTxAndId.Iter getTransactions(long fromTxId) throws IOException {
+        final MessageCursor c = txLog.cursor(fromTxId);
+        return new StoreTxAndId.Iter() {
+
+            public StoreTxAndId next() throws IOException {
+                if (c.next()) {
+                    long id = c.getId();
+                    StoreTx tx = serializer.deserialize(new ByteArrayInputStream(c.getPayload()), StoreTx.class);
+                    return new StoreTxAndId(id, tx);
+                }
+                return null;
+            }
+
+            public void close() throws IOException {
+                c.close();
+            }
+        };
     }
 
     private void dispatch(ObjectEvent<K, V> ev) {
