@@ -302,23 +302,29 @@ public class KeyValueStoreImpl<K, V> implements ClusteredKeyValueStore<K, V> {
     }
 
     @Override
-    public StoreTxAndId.Iter getTransactions(long fromTxId) throws IOException {
-        final MessageCursor c = txLog.cursor(fromTxId);
-        return new StoreTxAndId.Iter() {
-
-            public StoreTxAndId next() throws IOException {
-                if (c.next()) {
-                    long id = c.getId();
-                    StoreTx tx = serializer.deserialize(new ByteArrayInputStream(c.getPayload()), StoreTx.class);
-                    return new StoreTxAndId(id, tx);
+    public void writeTransactions(long fromTxId, OutputStream out) throws IOException {
+        DataOutputStream dos = new DataOutputStream(out);
+        MessageCursor c = txLog.cursor(fromTxId);
+        try {
+            boolean first = true;
+            for (; c.next(); ) {
+                long id = c.getId();
+                if (first) {
+                    if (id != fromTxId) throw new IllegalArgumentException("Invalid txId " + fromTxId);
+                    first = false;
                 }
-                return null;
+                dos.writeLong(id);
+                byte[] payload = c.getPayload();
+                dos.writeInt(payload.length);
+                dos.write(payload);
             }
-
-            public void close() throws IOException {
+        } finally {
+            try {
                 c.close();
+            } catch (IOException e) {
+                log.error("Error closing cursor: " + e, e);
             }
-        };
+        }
     }
 
     private void dispatch(ObjectEvent<K, V> ev) {

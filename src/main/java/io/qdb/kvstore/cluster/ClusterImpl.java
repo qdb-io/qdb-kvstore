@@ -7,7 +7,7 @@ import io.qdb.kvstore.StoreTx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
+import java.io.*;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -23,6 +23,7 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
     private final ExecutorService executorService;
     private final ServerLocator serverLocator;
     private final Transport transport;
+    private final KeyValueStore.Serializer serializer;
     private final int proposalTimeoutMs;
     private final Paxos<SequenceNo, StoreTx> paxos;
     private final Object proposeLock = new Object();
@@ -37,10 +38,11 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
     public enum Status { DISCONNECTED, JOINING, SYNCING, UP, CLOSED }
 
     public ClusterImpl(EventBus eventBus, ExecutorService executorService, ServerLocator serverLocator,
-                Transport transport, int proposalTimeoutMs) {
+                Transport transport, KeyValueStore.Serializer serializer, int proposalTimeoutMs) {
         this.executorService = executorService;
         this.serverLocator = serverLocator;
         this.transport = transport;
+        this.serializer = serializer;
         this.proposalTimeoutMs = proposalTimeoutMs;
 
         Paxos.Transport<SequenceNo, StoreTx> pt = new Paxos.Transport<SequenceNo, StoreTx>() {
@@ -140,23 +142,38 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
             if (store.isEmpty()) {  // load a snapshot
                 store.loadSnapshot(transport.getLatestSnapshotFrom(server));
             } else {                // stream transactions
-                StoreTxAndId.Iter i = transport.getTransactionsFrom(server, store.getNextTxId());
+                DataInputStream ins = new DataInputStream(transport.readTransactionsFrom(server, store.getNextTxId()));
                 try {
-                    for (StoreTxAndId tx; (tx = i.next()) != null; ) {
+                    while (true) {
+                        long txId;
+                        try {
+                            txId = ins.readLong();
+                        } catch (EOFException e) {
+                            break;
+                        }
+
+                        // it would be a little more efficient to de-serialize straight from ins but then people
+                        // need to be careful how they coded the serializer to not read extra bytes etc.
+                        int sz = ins.readInt();
+                        byte[] payload = new byte[sz];
+                        ins.readFully(payload);
+                        StoreTx tx = serializer.deserialize(new ByteArrayInputStream(payload), StoreTx.class);
+
                         // we might accept the next transaction via Paxos before getting it from the stream in which
                         // case it will already have been appended so check for this
                         synchronized (this) {
                             long expectedTxId = store.getNextTxId();
-                            if (expectedTxId == tx.txId) {
-                                store.appendToTxLogAndApply(tx.storeTx);
+                            if (expectedTxId == txId) {
+                                store.appendToTxLogAndApply(tx);
                             } else {
-                                log.info("Synced tx from " + server + " has txId 0x" + Long.toHexString(tx.txId) + " but we " +
+                                log.info("Synced tx from " + server + " has txId 0x" + Long.toHexString(txId) + " but we " +
                                         "are expecting 0x" + Long.toHexString(expectedTxId) + ", ending sync");
+                                break;
                             }
                         }
                     }
                 } finally {
-                    i.close();
+                    ins.close();
                 }
             }
         } catch (IOException e) {

@@ -65,9 +65,10 @@ public interface KeyValueStore<K, V> extends Closeable {
     List<String> getMapNames();
 
     /**
-     * Get store transactions. This is used to supply transactions to another server in the cluster.
+     * Write store transactions to the stream. This is used to supply transactions to another server in the
+     * cluster. Throws IllegalArgumentException if fromTxId is invalid (too old or mismatched).
      */
-    StoreTxAndId.Iter getTransactions(long fromTxId) throws IOException;
+    void writeTransactions(long fromTxId, OutputStream out) throws IOException;
 
     /**
      * A copy of the data in a data store.

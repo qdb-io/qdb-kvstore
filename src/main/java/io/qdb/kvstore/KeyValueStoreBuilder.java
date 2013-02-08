@@ -51,7 +51,7 @@ public class KeyValueStoreBuilder<K, V> {
                     new ThreadFactoryBuilder().setNameFormat("qdb-kvstore-%d")
                             .setUncaughtExceptionHandler(new UncaughtHandler()).build());
             }
-            cluster = new ClusterImpl(eventBus, executorService, serverLocator, transport, proposalTimeoutMs);
+            cluster = new ClusterImpl(eventBus, executorService, serverLocator, transport, serializer, proposalTimeoutMs);
         } else {
             cluster = new StandaloneCluster();
         }

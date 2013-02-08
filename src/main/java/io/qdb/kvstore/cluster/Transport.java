@@ -27,7 +27,8 @@ public interface Transport {
 
     /**
      * Stream transactions since txId from the server.
+     * @see io.qdb.kvstore.KeyValueStore#writeTransactions(long, java.io.OutputStream)
      */
-    StoreTxAndId.Iter getTransactionsFrom(String from, long txId) throws IOException;
+    InputStream readTransactionsFrom(String from, long txId) throws IOException;
 
 }
