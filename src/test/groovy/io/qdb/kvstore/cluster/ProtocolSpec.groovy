@@ -109,6 +109,8 @@ class ProtocolSpec extends Specification {
         transport.msg == expectedMsg
         list.size() == 2
         list[0].id == 123
+        list[0].storeTx.map == "a"
+        list[1].storeTx.map == "b"
     }
 
     private byte[] serialize(Object o) {
