@@ -15,7 +15,7 @@ import java.util.zip.GZIPOutputStream;
 /**
  * Encodes and decodes the messages we send to and receive from other servers in a cluster.
  */
-public class Protocol implements Transport.MessageListener, Paxos.Transport<SequenceNo, StoreTx> {
+public class Protocol implements Transport.Listener, Paxos.Transport<SequenceNo, StoreTx> {
 
     private static final Logger log = LoggerFactory.getLogger(Protocol.class);
 
@@ -33,6 +33,7 @@ public class Protocol implements Transport.MessageListener, Paxos.Transport<Sequ
 
     public interface Listener {
         void onPaxosMessageReceived(String from, PaxosMessage msg);
+        void onServersFound(String[] servers);
     }
 
     public Protocol(Transport transport, KeyValueStore.Serializer serializer, Listener listener) {
@@ -201,6 +202,11 @@ public class Protocol implements Transport.MessageListener, Paxos.Transport<Sequ
                 if (log.isDebugEnabled()) log.debug(e.toString(), e);
             }
         }
+    }
+
+    @Override
+    public void onServersFound(String[] servers) {
+        listener.onServersFound(servers);
     }
 
     public static class Tx {

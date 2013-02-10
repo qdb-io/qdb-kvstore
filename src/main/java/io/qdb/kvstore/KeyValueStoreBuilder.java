@@ -1,6 +1,5 @@
 package io.qdb.kvstore;
 
-import com.google.common.eventbus.EventBus;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import io.qdb.kvstore.cluster.*;
 import org.slf4j.Logger;
@@ -28,9 +27,7 @@ public class KeyValueStoreBuilder<K, V> {
     private int snapshotCount = 3;
     private int snapshotIntervalSecs = 60;
 
-    private EventBus eventBus;
     private ExecutorService executorService;
-    private ServerLocator serverLocator;
     private Transport transport;
     private int proposalTimeoutMs = 4000;
 
@@ -42,16 +39,13 @@ public class KeyValueStoreBuilder<K, V> {
         if (versionProvider == null) versionProvider = new NopVersionProvider<V>();
 
         Cluster cluster;
-        if (serverLocator != null || transport != null) {
-            if (serverLocator == null) throw new IllegalStateException("serverLocator is required");
-            if (transport == null) throw new IllegalStateException("transport is required");
-            if (eventBus == null) throw new IllegalStateException("eventBus is required");
+        if (transport != null) {
             if (executorService == null)  {
                 executorService = Executors.newCachedThreadPool(
                     new ThreadFactoryBuilder().setNameFormat("qdb-kvstore-%d")
                             .setUncaughtExceptionHandler(new UncaughtHandler()).build());
             }
-            cluster = new ClusterImpl(eventBus, executorService, serverLocator, transport, serializer, proposalTimeoutMs);
+            cluster = new ClusterImpl(executorService, transport, serializer, proposalTimeoutMs);
         } else {
             cluster = new StandaloneCluster();
         }
@@ -145,28 +139,10 @@ public class KeyValueStoreBuilder<K, V> {
     }
 
     /**
-     * Set event bus use for communication between cluster components. Only required for clustered deployment.
-     * The {@link #serverLocator} and {@link Transport} must be hooked up to this bus.
-     */
-    public KeyValueStoreBuilder eventBus(EventBus eventBus) {
-        this.eventBus = eventBus;
-        return this;
-    }
-
-    /**
      * Set thread pool that used for background tasks. A default pool is created if none is set.
      */
     public KeyValueStoreBuilder executorService(ExecutorService executorService) {
         this.executorService = executorService;
-        return this;
-    }
-
-    /**
-     * The server locator is required for clustering and is responsible for discovering whuch servers are in the
-     * cluster.
-     */
-    public KeyValueStoreBuilder serverLocator(ServerLocator serverLocator) {
-        this.serverLocator = serverLocator;
         return this;
     }
 

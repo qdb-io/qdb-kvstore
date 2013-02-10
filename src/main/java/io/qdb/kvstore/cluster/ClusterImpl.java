@@ -1,7 +1,5 @@
 package io.qdb.kvstore.cluster;
 
-import com.google.common.eventbus.EventBus;
-import com.google.common.eventbus.Subscribe;
 import io.qdb.kvstore.KeyValueStore;
 import io.qdb.kvstore.StoreTx;
 import org.slf4j.Logger;
@@ -23,7 +21,6 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
     private static final Logger log = LoggerFactory.getLogger(ClusterImpl.class);
 
     private final ExecutorService executorService;
-    private final ServerLocator serverLocator;
     private final Transport transport;
     private final Protocol protocol;
     private final int proposalTimeoutMs;
@@ -41,18 +38,15 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
 
     // these are the commands we send to other nodes in the cluster
 
-    public ClusterImpl(EventBus eventBus, ExecutorService executorService, ServerLocator serverLocator,
-                Transport transport, KeyValueStore.Serializer serializer, int proposalTimeoutMs) {
+    public ClusterImpl(ExecutorService executorService, Transport transport, KeyValueStore.Serializer serializer,
+                       int proposalTimeoutMs) {
         this.executorService = executorService;
-        this.serverLocator = serverLocator;
         this.transport = transport;
         this.proposalTimeoutMs = proposalTimeoutMs;
 
         protocol = new Protocol(transport, serializer, this);
 
         paxos = new Paxos<SequenceNo, StoreTx>(transport.getSelf(), protocol, this, new PaxosMessage.Factory(), this);
-
-        eventBus.register(this);
     }
 
     @Override
@@ -60,7 +54,7 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
         synchronized (this) {   // better not have any long running stuff in sync blocks
             status = Status.CLOSED;
         }
-        serverLocator.close();
+        transport.close();
         if (proposingThread != null) proposingThread.interrupt();
     }
 
@@ -69,7 +63,7 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
         if (this.store != null) throw new IllegalStateException("Already have a store: " + this.store);
         this.store = store;
         protocol.setStore(store);
-        serverLocator.lookForServers();
+        transport.lookForServers();
         // serverLocator will publish a ServerLocator.ServersFound event when it knows all the servers in our cluster
         // and we start joining the cluster when we get that event
     }
@@ -83,8 +77,8 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
         return KeyValueStore.Status.READ_ONLY;
     }
 
-    @Subscribe
-    public synchronized void onServersFound(ServerLocator.ServersFound ev) {
+    @Override
+    public synchronized void onServersFound(String[] servers) {
         switch (status) {
             case CLOSED:
                 break;
@@ -92,7 +86,7 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
                 joinClusterAsync();
                 break;
             default:
-                paxos.setNodes(ev.servers);
+                paxos.setNodes(servers);
         }
     }
 

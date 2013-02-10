@@ -5,7 +5,7 @@ import java.io.IOException;
 public class TransportForTests implements Transport {
 
     public String self;
-    public MessageListener listener;
+    public Listener listener;
 
     public String to;
     public byte[] msg;
@@ -17,7 +17,7 @@ public class TransportForTests implements Transport {
     }
 
     @Override
-    public void init(MessageListener listener) {
+    public void init(Listener listener) {
         this.listener = listener;
     }
 
@@ -37,5 +37,13 @@ public class TransportForTests implements Transport {
         this.from = from;
         this.msg = msg;
         return response;
+    }
+
+    @Override
+    public void lookForServers() {
+    }
+
+    @Override
+    public void close() throws IOException {
     }
 }
