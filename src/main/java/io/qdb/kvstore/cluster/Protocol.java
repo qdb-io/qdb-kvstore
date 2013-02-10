@@ -151,7 +151,7 @@ public class Protocol implements Transport.MessageListener, Paxos.Transport<Sequ
                 long id = c.getId();
                 if (first) {
                     boolean badTxId = id != fromTxId;
-                    dos.writeBoolean(badTxId);
+                    dos.writeBoolean(!badTxId);
                     if (badTxId) break;
                     first = false;
                 }
@@ -160,7 +160,7 @@ public class Protocol implements Transport.MessageListener, Paxos.Transport<Sequ
                 dos.writeInt(payload.length);
                 dos.write(payload);
             }
-            dos.flush();
+            dos.close();
         } finally {
             try {
                 c.close();
