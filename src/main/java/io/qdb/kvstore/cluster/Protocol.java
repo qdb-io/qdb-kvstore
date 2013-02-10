@@ -138,7 +138,7 @@ public class Protocol implements Transport.MessageListener, Paxos.Transport<Sequ
         };
     }
 
-    private void receiveGetTransactions(InputStream ins, OutputStream out) throws IOException {
+    private void handleGetTransactions(InputStream ins, OutputStream out) throws IOException {
         DataInputStream din = new DataInputStream(ins);
         long fromTxId = din.readLong();
 
@@ -172,7 +172,7 @@ public class Protocol implements Transport.MessageListener, Paxos.Transport<Sequ
 
     @Override
     public void onMessageReceived(String from, InputStream ins, OutputStream out) throws IOException {
-        if (store == null) throw new IOException("Not ready to receive messages");
+        if (store == null) throw new IllegalStateException("Not ready to receive messages as store has not been set");
         int type = ins.read();
         switch (type) {
             case -1:
@@ -185,7 +185,7 @@ public class Protocol implements Transport.MessageListener, Paxos.Transport<Sequ
                 handleGetSnapshot(out);
                 break;
             case TYPE_GET_TRANSACTIONS:
-                receiveGetTransactions(ins, out);
+                handleGetTransactions(ins, out);
                 break;
             default:
                 log.error("Unknown message type " + type + " (0x" + Integer.toHexString(type & 0xFF) +
