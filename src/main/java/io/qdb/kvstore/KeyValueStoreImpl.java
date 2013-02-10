@@ -5,7 +5,6 @@ import io.qdb.buffer.MessageCursor;
 import io.qdb.buffer.PersistentMessageBuffer;
 import io.qdb.kvstore.cluster.Cluster;
 import io.qdb.kvstore.cluster.ClusteredKeyValueStore;
-import io.qdb.kvstore.cluster.StoreTxAndId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -144,7 +143,7 @@ public class KeyValueStoreImpl<K, V> implements ClusteredKeyValueStore<K, V> {
     }
 
     @SuppressWarnings("unchecked")
-    private synchronized Snapshot<K, V> createSnapshot() throws IOException {
+    public synchronized Snapshot<K, V> createSnapshot() throws IOException {
         Snapshot<K, V> s = new Snapshot<K, V>();
         s.storeId = storeId;
         s.txId = txLog.getNextMessageId();
@@ -156,16 +155,9 @@ public class KeyValueStoreImpl<K, V> implements ClusteredKeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized void createSnapshot(OutputStream out) throws IOException {
-        txLog.sync();
-        serializer.serialize(createSnapshot(), out);
-    }
-
-    @Override
     @SuppressWarnings("unchecked")
-    public synchronized void loadSnapshot(InputStream in) throws IOException {
+    public synchronized void loadSnapshot(Snapshot<K, V> snapshot) throws IOException {
         if (!isEmpty()) throw new IllegalStateException("Store is not empty");
-        Snapshot<K, V> snapshot = (Snapshot<K, V>)serializer.deserialize(in, Snapshot.class);
         if (snapshot.txId == null) throw new IllegalArgumentException("Snapshot is missing txId");
         storeId = snapshot.storeId;
         txLog.setFirstMessageId(snapshot.txId);
@@ -301,30 +293,11 @@ public class KeyValueStoreImpl<K, V> implements ClusteredKeyValueStore<K, V> {
         }
     }
 
-    @Override
-    public void writeTransactions(long fromTxId, OutputStream out) throws IOException {
-        DataOutputStream dos = new DataOutputStream(out);
-        MessageCursor c = txLog.cursor(fromTxId);
-        try {
-            boolean first = true;
-            for (; c.next(); ) {
-                long id = c.getId();
-                if (first) {
-                    if (id != fromTxId) throw new IllegalArgumentException("Invalid txId " + fromTxId);
-                    first = false;
-                }
-                dos.writeLong(id);
-                byte[] payload = c.getPayload();
-                dos.writeInt(payload.length);
-                dos.write(payload);
-            }
-        } finally {
-            try {
-                c.close();
-            } catch (IOException e) {
-                log.error("Error closing cursor: " + e, e);
-            }
-        }
+    /**
+     * Open a cursor reading from the tx log.
+     */
+    public MessageCursor openTxLogCursor(long fromTxId) throws IOException {
+        return txLog.cursor(fromTxId);
     }
 
     private void dispatch(ObjectEvent<K, V> ev) {

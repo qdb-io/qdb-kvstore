@@ -1,7 +1,5 @@
 package io.qdb.kvstore;
 
-import io.qdb.kvstore.cluster.StoreTxAndId;
-
 import java.io.*;
 import java.util.List;
 import java.util.Map;
@@ -37,18 +35,6 @@ public interface KeyValueStore<K, V> extends Closeable {
     <T extends V> ConcurrentMap<K, T> getMap(String name, Class<T> cls);
 
     /**
-     * Create a snapshot of our data. This is useful for transferring our state to another KeyValueStore (maybe
-     * on a different machine).
-     */
-    void createSnapshot(OutputStream out) throws IOException;
-
-    /**
-     * Populate this store with data from the snapshot. Note that this is only allowed if the store is
-     * {@link #isEmpty()}.
-     */
-    void loadSnapshot(InputStream in) throws IOException;
-
-    /**
      * Save a snapshot. This is a NOP if we are already busy saving a snapshot or if no new transactions have been
      * applied since the most recent snapshot was saved.
      */
@@ -63,12 +49,6 @@ public interface KeyValueStore<K, V> extends Closeable {
      * Get the names of all of the maps in this store.
      */
     List<String> getMapNames();
-
-    /**
-     * Write store transactions to the stream. This is used to supply transactions to another server in the
-     * cluster. Throws IllegalArgumentException if fromTxId is invalid (too old or mismatched).
-     */
-    void writeTransactions(long fromTxId, OutputStream out) throws IOException;
 
     /**
      * A copy of the data in a data store.

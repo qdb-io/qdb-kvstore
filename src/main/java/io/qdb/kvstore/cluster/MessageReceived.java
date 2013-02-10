@@ -6,9 +6,9 @@ package io.qdb.kvstore.cluster;
 public class MessageReceived {
 
     public final String from;
-    public final Message message;
+    public final PaxosMessage message;
 
-    public MessageReceived(String from, Message message) {
+    public MessageReceived(String from, PaxosMessage message) {
         this.from = from;
         this.message = message;
     }

@@ -7,7 +7,7 @@ import java.io.Serializable;
 /**
  * A message between nodes in our cluster.
  */
-public class Message implements Serializable, Paxos.Msg<SequenceNo, StoreTx> {
+public class PaxosMessage implements Serializable, Paxos.Msg<SequenceNo, StoreTx> {
 
     public Paxos.Msg.Type type;
     public SequenceNo n;
@@ -17,20 +17,20 @@ public class Message implements Serializable, Paxos.Msg<SequenceNo, StoreTx> {
     public static class Factory implements Paxos.MsgFactory<SequenceNo, StoreTx> {
         @Override
         public Paxos.Msg<SequenceNo, StoreTx> create(Type type, SequenceNo sequenceNo, StoreTx v, SequenceNo nv) {
-            return new Message(type, sequenceNo, v, nv);
+            return new PaxosMessage(type, sequenceNo, v, nv);
         }
     }
 
     @SuppressWarnings("UnusedDeclaration")
-    public Message() { }
+    public PaxosMessage() { }
 
-    public Message(Paxos.Msg.Type type, SequenceNo n, StoreTx v) {
+    public PaxosMessage(Paxos.Msg.Type type, SequenceNo n, StoreTx v) {
         this.type = type;
         this.n = n;
         this.v = v;
     }
 
-    public Message(Paxos.Msg.Type type, SequenceNo n, StoreTx v, SequenceNo nv) {
+    public PaxosMessage(Paxos.Msg.Type type, SequenceNo n, StoreTx v, SequenceNo nv) {
         this(type, n, v);
         this.nv = nv;
     }

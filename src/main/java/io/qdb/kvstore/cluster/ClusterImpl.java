@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.util.Iterator;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -16,14 +17,15 @@ import java.util.concurrent.TimeUnit;
  * Uses the Paxos algorithm to 'catch up' to other servers in the cluster, to order transactions and to receive
  * transactions from other servers.
  */
-public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>, Paxos.Listener<SequenceNo, StoreTx> {
+public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>,
+        Paxos.Listener<SequenceNo, StoreTx>, Protocol.Listener {
 
     private static final Logger log = LoggerFactory.getLogger(ClusterImpl.class);
 
     private final ExecutorService executorService;
     private final ServerLocator serverLocator;
     private final Transport transport;
-    private final KeyValueStore.Serializer serializer;
+    private final Protocol protocol;
     private final int proposalTimeoutMs;
     private final Paxos<SequenceNo, StoreTx> paxos;
     private final Object proposeLock = new Object();
@@ -37,21 +39,18 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
 
     public enum Status { DISCONNECTED, JOINING, SYNCING, UP, CLOSED }
 
+    // these are the commands we send to other nodes in the cluster
+
     public ClusterImpl(EventBus eventBus, ExecutorService executorService, ServerLocator serverLocator,
                 Transport transport, KeyValueStore.Serializer serializer, int proposalTimeoutMs) {
         this.executorService = executorService;
         this.serverLocator = serverLocator;
         this.transport = transport;
-        this.serializer = serializer;
         this.proposalTimeoutMs = proposalTimeoutMs;
 
-        Paxos.Transport<SequenceNo, StoreTx> pt = new Paxos.Transport<SequenceNo, StoreTx>() {
-            public void send(Object to, Paxos.Msg<SequenceNo, StoreTx> msg, Object from) {
-                ClusterImpl.this.transport.send((String) to, (Message)msg);
-            }
-        };
+        protocol = new Protocol(transport, serializer, this);
 
-        paxos = new Paxos<SequenceNo, StoreTx>(transport.getSelf(), pt, this, new Message.Factory(), this);
+        paxos = new Paxos<SequenceNo, StoreTx>(transport.getSelf(), protocol, this, new PaxosMessage.Factory(), this);
 
         eventBus.register(this);
     }
@@ -69,6 +68,7 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
     public synchronized void init(ClusteredKeyValueStore store) {
         if (this.store != null) throw new IllegalStateException("Already have a store: " + this.store);
         this.store = store;
+        protocol.setStore(store);
         serverLocator.lookForServers();
         // serverLocator will publish a ServerLocator.ServersFound event when it knows all the servers in our cluster
         // and we start joining the cluster when we get that event
@@ -137,43 +137,27 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
     /**
      * Download transactions or a snapshot from server to get us in sync.
      */
+    @SuppressWarnings("unchecked")
     private void syncWith(String server) {
         try {
             if (store.isEmpty()) {  // load a snapshot
-                store.loadSnapshot(transport.getLatestSnapshotFrom(server));
+                store.loadSnapshot(protocol.getSnapshot(server));
             } else {                // stream transactions
-                DataInputStream ins = new DataInputStream(transport.readTransactionsFrom(server, store.getNextTxId()));
-                try {
-                    while (true) {
-                        long txId;
-                        try {
-                            txId = ins.readLong();
-                        } catch (EOFException e) {
-                            break;
-                        }
-
-                        // it would be a little more efficient to de-serialize straight from ins but then people
-                        // need to be careful how they coded the serializer to not read extra bytes etc.
-                        int sz = ins.readInt();
-                        byte[] payload = new byte[sz];
-                        ins.readFully(payload);
-                        StoreTx tx = serializer.deserialize(new ByteArrayInputStream(payload), StoreTx.class);
-
+                Iterator<Protocol.Tx> i = protocol.getTransactions(server, store.getNextTxId());
+                while (i.hasNext()) {
+                    Protocol.Tx tx = i.next();
+                    synchronized (this) {
                         // we might accept the next transaction via Paxos before getting it from the stream in which
                         // case it will already have been appended so check for this
-                        synchronized (this) {
-                            long expectedTxId = store.getNextTxId();
-                            if (expectedTxId == txId) {
-                                store.appendToTxLogAndApply(tx);
-                            } else {
-                                log.info("Synced tx from " + server + " has txId 0x" + Long.toHexString(txId) + " but we " +
-                                        "are expecting 0x" + Long.toHexString(expectedTxId) + ", ending sync");
-                                break;
-                            }
+                        long expectedTxId = store.getNextTxId();
+                        if (expectedTxId == tx.id) {
+                            store.appendToTxLogAndApply(tx.storeTx);
+                        } else {
+                            log.info("Synced tx from " + server + " has txId 0x" + Long.toHexString(tx.id) + " but we " +
+                                    "are expecting 0x" + Long.toHexString(expectedTxId) + ", ending sync");
+                            break;
                         }
                     }
-                } finally {
-                    ins.close();
                 }
             }
         } catch (IOException e) {
@@ -186,21 +170,20 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
         // drop back into join loop
     }
 
-    @Subscribe
-    public synchronized void onMessageReceived(MessageReceived ev) {
+    public synchronized void onPaxosMessageReceived(String from, PaxosMessage msg) {
         // its not great that we need to know the message types used by Paxos but we have to stop responding as an
         // 'up' node if we are not able to append transactions and I don't want to have to keep a Paxos 'status'
         // in sync with our own status
-        switch (ev.message.type) {
+        switch (msg.type) {
             case PREPARE:
                 if (status != Status.UP) {
                     if (log.isDebugEnabled()) {
-                        log.debug("Discarding " + ev.message + " from " + ev.from + " as we are " + status);
+                        log.debug("Discarding " + msg + " from " + from + " as we are " + status);
                     }
                     break;
                 }
             default:
-                paxos.onMessageReceived(ev.from, ev.message);
+                paxos.onMessageReceived(from, msg);
         }
     }
 
@@ -311,5 +294,4 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
     private synchronized Status getStatus() {
         return status;
     }
-
 }

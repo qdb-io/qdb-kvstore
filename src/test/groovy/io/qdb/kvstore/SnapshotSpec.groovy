@@ -4,6 +4,7 @@ import org.apache.commons.io.FileUtils
 import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Stepwise
+import io.qdb.kvstore.cluster.ClusteredKeyValueStore
 
 /**
  * Saving and loading snapshots.
@@ -14,13 +15,13 @@ class SnapshotSpec extends Specification {
     @Shared File baseDir = new File("build/test-snapshots")
     @Shared FilenameFilter filter = new RegexFilenameFilter(".+\\.snapshot")
 
-    private KeyValueStore<String, ModelObject> createStore(File dir, boolean nuke = true) {
+    private ClusteredKeyValueStore<String, ModelObject> createStore(File dir, boolean nuke = true) {
         if (nuke && dir.exists() && dir.isDirectory()) FileUtils.deleteDirectory(dir)
         return new KeyValueStoreBuilder<Integer, ModelObject>()
                 .dir(dir)
                 .serializer(new JsonSerializer())
                 .versionProvider(new VersionProvider())
-                .create()
+                .create() as ClusteredKeyValueStore<String, ModelObject>
     }
 
     def "saveSnapshot with no changes is NOP"() {
@@ -62,13 +63,12 @@ class SnapshotSpec extends Specification {
         def store = createStore(new File(baseDir, "one"), false)
         def store2 = createStore(new File(baseDir, "two"), true)
 
-        ByteArrayOutputStream bos = new ByteArrayOutputStream()
-        store.createSnapshot(bos)
-        store2.loadSnapshot(new ByteArrayInputStream(bos.toByteArray()))
+        def snapshot = store.createSnapshot()
+        store2.loadSnapshot(snapshot)
 
         IllegalStateException exception = null
         try {
-            store2.loadSnapshot(new ByteArrayInputStream(bos.toByteArray()))
+            store2.loadSnapshot(snapshot)
         } catch (IllegalStateException e) {
             exception = e;
         }
