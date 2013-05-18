@@ -79,14 +79,13 @@ public class ClusterImpl implements Cluster, Paxos.SequenceNoFactory<SequenceNo>
 
     @Override
     public synchronized void onServersFound(String[] servers) {
+        paxos.setNodes(servers);
         switch (status) {
             case CLOSED:
                 break;
             case DISCONNECTED:
                 joinClusterAsync();
                 break;
-            default:
-                paxos.setNodes(servers);
         }
     }
 
