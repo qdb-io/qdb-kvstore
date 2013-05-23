@@ -7,7 +7,7 @@ import org.apache.commons.io.FileUtils
 import java.util.concurrent.ConcurrentMap
 
 /**
- * Basic non-clustered tests.
+ * Basic map tests.
  */
 @Stepwise
 class MapApiSpec extends Specification {
@@ -20,7 +20,6 @@ class MapApiSpec extends Specification {
     static class Listener implements KeyValueStore.Listener<String, ModelObject> {
         List<KeyValueStore.ObjectEvent<String, ModelObject>> events = []
         void onObjectEvent(KeyValueStore.ObjectEvent<String, ModelObject> ev) { events << ev }
-        void onStatusChange(KeyValueStore.Status status) { }
     }
 
     def setupSpec() {
@@ -49,16 +48,6 @@ class MapApiSpec extends Specification {
         store.isEmpty()
         widgets.isEmpty()
         widgets.size() == 0
-    }
-
-    def "getStoreId"() {
-        expect:
-        store.getStoreId() != null
-    }
-
-    def "getStatus"() {
-        expect:
-        store.getStatus() == KeyValueStore.Status.UP
     }
 
     def "put and get"() {

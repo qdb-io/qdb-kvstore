@@ -4,7 +4,6 @@ import org.apache.commons.io.FileUtils
 import spock.lang.Shared
 import spock.lang.Specification
 import spock.lang.Stepwise
-import io.qdb.kvstore.cluster.ClusteredKeyValueStore
 
 /**
  * Saving and loading snapshots.
@@ -15,13 +14,13 @@ class SnapshotSpec extends Specification {
     @Shared File baseDir = new File("build/test-snapshots")
     @Shared FilenameFilter filter = new RegexFilenameFilter(".+\\.snapshot")
 
-    private ClusteredKeyValueStore<String, ModelObject> createStore(File dir, boolean nuke = true) {
+    private KeyValueStore<String, ModelObject> createStore(File dir, boolean nuke = true) {
         if (nuke && dir.exists() && dir.isDirectory()) FileUtils.deleteDirectory(dir)
         return new KeyValueStoreBuilder<Integer, ModelObject>()
                 .dir(dir)
                 .serializer(new JsonSerializer())
                 .versionProvider(new VersionProvider())
-                .create() as ClusteredKeyValueStore<String, ModelObject>
+                .create()
     }
 
     def "saveSnapshot with no changes is NOP"() {
@@ -59,34 +58,6 @@ class SnapshotSpec extends Specification {
         one.version == 1
     }
 
-    def "transfer snapshot"() {
-        def store = createStore(new File(baseDir, "one"), false)
-        def store2 = createStore(new File(baseDir, "two"), true)
-
-        def snapshot = store.createSnapshot()
-        store2.loadSnapshot(snapshot)
-
-        IllegalStateException exception = null
-        try {
-            store2.loadSnapshot(snapshot)
-        } catch (IllegalStateException e) {
-            exception = e;
-        }
-
-        def widgets = store2.getMap("widgets")
-        def sz = widgets.size()
-        def one = widgets.get("1")
-        store.close()
-        store2.close()
-
-        expect:
-        sz == 1
-        one instanceof ModelObject
-        one.name == "one"
-        one.version == 1
-        exception != null
-    }
-
     def "replay tx log on startup"() {
         File dir = new File(baseDir, "three")
         def store = createStore(dir)
@@ -105,6 +76,4 @@ class SnapshotSpec extends Specification {
         one.name == "one"
         one.version == 1
     }
-
-
 }

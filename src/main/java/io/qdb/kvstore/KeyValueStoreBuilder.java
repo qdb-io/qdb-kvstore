@@ -1,22 +1,13 @@
 package io.qdb.kvstore;
 
-import com.google.common.util.concurrent.ThreadFactoryBuilder;
-import io.qdb.kvstore.cluster.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.File;
 import java.io.IOException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 /**
  * Helps create a DataStore instance. This makes it possible for the data store to receive all its configuration
  * in the constructor without breaking clients when new parameters are needed.
  */
 public class KeyValueStoreBuilder<K, V> {
-
-    private static final Logger log = LoggerFactory.getLogger(KeyValueStoreBuilder.class);
 
     private File dir;
     private KeyValueStore.Serializer serializer;
@@ -27,32 +18,13 @@ public class KeyValueStoreBuilder<K, V> {
     private int snapshotCount = 3;
     private int snapshotIntervalSecs = 60;
 
-    private ExecutorService executorService;
-    private Transport transport;
-    private int proposalTimeoutMs = 4000;
-
     public KeyValueStoreBuilder() { }
 
     public KeyValueStore<K, V> create() throws IOException {
         if (dir == null) throw new IllegalStateException("dir is required");
         if (serializer == null) throw new IllegalStateException("serializer is required");
         if (versionProvider == null) versionProvider = new NopVersionProvider<V>();
-
-        Cluster cluster;
-        if (transport != null) {
-            if (executorService == null)  {
-                executorService = Executors.newCachedThreadPool(
-                    new ThreadFactoryBuilder().setNameFormat("qdb-kvstore-%d")
-                            .setUncaughtExceptionHandler(new UncaughtHandler()).build());
-            }
-            cluster = new ClusterImpl(executorService, transport, serializer, proposalTimeoutMs);
-        } else {
-            cluster = new StandaloneCluster();
-        }
-
-        // todo use executor service instead of timer for KeyValueStoreImpl as well
-
-        return new KeyValueStoreImpl<K, V>(serializer, versionProvider, listener, cluster, dir,
+        return new KeyValueStoreImpl<K, V>(serializer, versionProvider, listener, dir,
                 txLogSizeM, maxObjectSize, snapshotCount, snapshotIntervalSecs);
     }
 
@@ -130,64 +102,8 @@ public class KeyValueStoreBuilder<K, V> {
         return this;
     }
 
-    /**
-     * How long should serves in a cluster wait for proposed transactions to be accepted?
-     */
-    public KeyValueStoreBuilder proposalTimeoutMs(int proposalTimeoutMs) {
-        this.proposalTimeoutMs = proposalTimeoutMs;
-        return this;
-    }
-
-    /**
-     * Set thread pool that used for background tasks. A default pool is created if none is set.
-     */
-    public KeyValueStoreBuilder executorService(ExecutorService executorService) {
-        this.executorService = executorService;
-        return this;
-    }
-
-    /**
-     * The transport is required for clustering and is responsible for sending messages to and receiving messages
-     * from other servers in the cluster.
-     */
-    public KeyValueStoreBuilder transport(Transport transport) {
-        this.transport = transport;
-        return this;
-    }
-
     private static class NopVersionProvider<V> implements KeyValueStore.VersionProvider<V> {
         public Object getVersion(V value) { return null; }
         public void incVersion(V value) { }
-    }
-
-    private static class StandaloneCluster implements Cluster {
-
-        private ClusteredKeyValueStore store;
-
-        public void init(ClusteredKeyValueStore store) {
-            this.store = store;
-        }
-
-        public KeyValueStore.Status getStoreStatus() {
-            return KeyValueStore.Status.UP;
-        }
-
-        @SuppressWarnings("unchecked")
-        public Object propose(StoreTx tx) throws ClusterException {
-            try {
-                return store.appendToTxLogAndApply(tx);
-            } catch (IOException e) {
-                throw new KeyValueStoreException(e.toString(), e);
-            }
-        }
-
-        public void close() throws IOException { }
-    }
-
-    private static class UncaughtHandler implements Thread.UncaughtExceptionHandler {
-        @Override
-        public void uncaughtException(Thread t, Throwable e) {
-            log.error(e.toString(), e);
-        }
     }
 }
