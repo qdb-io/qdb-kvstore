@@ -51,12 +51,12 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         txLog.setMaxPayloadSize(maxObjectSize + 100);
 
         File[] files = getSnapshotFiles();
-        StoreSnapshot<K, V> snapshot = null;
+        Map<String, Map<K, V>> snapshot = null;
         for (int i = files.length - 1; i >= 0; i--) {
             File f = files[i];
             BufferedInputStream in = new BufferedInputStream(new FileInputStream(f));
             try {
-                snapshot = (StoreSnapshot<K, V>)this.serializer.deserialize(in, StoreSnapshot.class);
+                snapshot = (Map<String, Map<K, V>>)this.serializer.deserialize(in, Map.class);
             } catch (Exception e) {
                 log.error("Error loading " + f + ", ignoring: " + e);
                 continue;
@@ -88,8 +88,10 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
             txLog.setFirstMessageId(mostRecentSnapshotId);
         }
 
-        if (snapshot != null) for (Map.Entry<String, Map<K, V>> e : snapshot.maps.entrySet()) {
-            maps.put(e.getKey(), new ConcurrentHashMap<K, V>(e.getValue()));
+        if (snapshot != null) {
+            for (Map.Entry<String, Map<K, V>> e : snapshot.entrySet()) {
+                maps.put(e.getKey(), new ConcurrentHashMap<K, V>(e.getValue()));
+            }
         }
 
         int count = 0;
@@ -121,17 +123,6 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         txLog.close();
     }
 
-    @SuppressWarnings("unchecked")
-    private synchronized StoreSnapshot<K, V> createSnapshot() throws IOException {
-        StoreSnapshot<K, V> s = new StoreSnapshot<K, V>();
-        s.txId = txLog.getNextMessageId();
-        s.maps = new HashMap<String, Map<K, V>>();
-        for (Map.Entry<String, ConcurrentMap<K, V>> e : maps.entrySet()) {
-            s.maps.put(e.getKey(), new HashMap<K, V>(e.getValue()));
-        }
-        return s;
-    }
-
     @Override
     public boolean isEmpty() {
         return maps.isEmpty();
@@ -142,7 +133,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
      * applied since the most recent snapshot was saved.
      */
     public void saveSnapshot() throws IOException {
-        StoreSnapshot snapshot;
+        Map<String, Map<K, V>> snapshot;
         long id;
         try {
             synchronized (this) {
@@ -151,7 +142,10 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                 txLog.sync();
                 id = txLog.getNextMessageId();
                 if (id == mostRecentSnapshotId) return; // nothing to do
-                snapshot = createSnapshot();
+                snapshot = new HashMap<String, Map<K, V>>();
+                for (Map.Entry<String, ConcurrentMap<K, V>> e : maps.entrySet()) {
+                    snapshot.put(e.getKey(), new HashMap<K, V>(e.getValue()));
+                }
             }
             File f = new File(dir, String.format("%016x", id) + ".snapshot");
             if (log.isDebugEnabled()) log.debug("Creating " + f);

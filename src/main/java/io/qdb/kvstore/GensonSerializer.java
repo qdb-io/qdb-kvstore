@@ -19,7 +19,6 @@ public class GensonSerializer implements KeyValueStoreSerializer {
     public GensonSerializer(Map<String, Class> aliases) {
         Genson.Builder b = new Genson.Builder().setSkipNull(true);
         b.addAlias("tx", StoreTx.class);
-        b.addAlias("snapshot", StoreSnapshot.class);
         for (Map.Entry<String, Class> e : aliases.entrySet()) b.addAlias(e.getKey(), e.getValue());
         genson = b.create();
         gensonPretty = b.useIndentation(true).create();

@@ -6,7 +6,7 @@ import java.io.OutputStream;
 
 /**
  * Responsible for converting objects to/from streams. Note that this must be able to serialize
- * {@link StoreSnapshot} and {@link StoreTx} instances which will reference K and V instances.
+ * maps containing K and V instances and {@link StoreTx} instances which will reference K and V instances.
  */
 public interface KeyValueStoreSerializer {
     public void serialize(Object value, boolean pretty, OutputStream out) throws IOException;
