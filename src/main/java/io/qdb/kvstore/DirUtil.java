@@ -6,7 +6,7 @@ import java.io.IOException;
 /**
  * Static utility methods to create directories and so on.
  */
-public class DirUtil {
+class DirUtil {
 
     /**
      * Ensure that dir exists, creating it if needed and that it is a writeable directory.

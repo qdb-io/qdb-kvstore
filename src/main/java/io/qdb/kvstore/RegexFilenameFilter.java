@@ -7,7 +7,7 @@ import java.util.regex.Pattern;
 /**
  * Matches files using a regex.
  */
-public class RegexFilenameFilter implements FilenameFilter {
+class RegexFilenameFilter implements FilenameFilter {
 
     private final Pattern pattern;
 
