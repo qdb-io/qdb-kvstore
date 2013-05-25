@@ -38,23 +38,6 @@ public interface KeyValueStore<K, V> extends Closeable {
      */
     List<String> getMapNames();
 
-    /**
-     * A copy of the data in a data store.
-     */
-    public static class Snapshot<K, V> implements Serializable {
-        public Long txId;
-        public Map<String, Map<K, V>> maps;
-    }
-
-    /**
-     * Responsible for converting objects to/from streams. Note that this must be able to serialize
-     * {@link Snapshot} and {@link StoreTx} instances which will reference K and V instances.
-     */
-    interface Serializer {
-        public void serialize(Object value, OutputStream out) throws IOException;
-        public <T> T deserialize(InputStream in, Class<T> cls) throws IOException;
-    }
-
     /** Extracts version numbers from objects for optimistic locking. */
     interface VersionProvider<V> {
         /** Get the version of value or null if it does not have a version. */

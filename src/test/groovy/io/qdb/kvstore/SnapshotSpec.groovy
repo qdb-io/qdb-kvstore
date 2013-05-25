@@ -18,7 +18,7 @@ class SnapshotSpec extends Specification {
         if (nuke && dir.exists() && dir.isDirectory()) FileUtils.deleteDirectory(dir)
         return new KeyValueStoreBuilder<Integer, ModelObject>()
                 .dir(dir)
-                .serializer(new JsonSerializer())
+                .alias("moo", ModelObject.class)
                 .versionProvider(new VersionProvider())
                 .create()
     }

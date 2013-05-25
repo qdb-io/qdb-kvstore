@@ -3,7 +3,8 @@ package io.qdb.kvstore;
 import java.io.Serializable;
 
 /**
- * A change to a data store.
+ * A change to a data store. {@link KeyValueStoreSerializer}'s must be able to serialize and de-serialize
+ * these.
  */
 public class StoreTx<K, V> implements Serializable {
 

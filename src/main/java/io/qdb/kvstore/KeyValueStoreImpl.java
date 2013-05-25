@@ -18,7 +18,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
 
     private static final Logger log = LoggerFactory.getLogger(KeyValueStoreImpl.class);
 
-    private final Serializer serializer;
+    private final KeyValueStoreSerializer serializer;
     private final VersionProvider<V> versionProvider;
     private final Listener<K, V> listener;
     private final File dir;
@@ -34,7 +34,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     private final ConcurrentMap<String, ConcurrentMap<K, V>> maps = new ConcurrentHashMap<String, ConcurrentMap<K, V>>();
 
     @SuppressWarnings("unchecked")
-    KeyValueStoreImpl(Serializer serializer, VersionProvider<V> versionProvider, Listener<K, V> listener,
+    KeyValueStoreImpl(KeyValueStoreSerializer serializer, VersionProvider<V> versionProvider, Listener<K, V> listener,
                       File dir, int txLogSizeM, int maxObjectSize, int snapshotCount,
                       int snapshotIntervalSecs)
             throws IOException {
@@ -51,12 +51,12 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         txLog.setMaxPayloadSize(maxObjectSize + 100);
 
         File[] files = getSnapshotFiles();
-        Snapshot<K, V> snapshot = null;
+        StoreSnapshot<K, V> snapshot = null;
         for (int i = files.length - 1; i >= 0; i--) {
             File f = files[i];
             BufferedInputStream in = new BufferedInputStream(new FileInputStream(f));
             try {
-                snapshot = (Snapshot<K, V>)this.serializer.deserialize(in, Snapshot.class);
+                snapshot = (StoreSnapshot<K, V>)this.serializer.deserialize(in, StoreSnapshot.class);
             } catch (Exception e) {
                 log.error("Error loading " + f + ", ignoring: " + e);
                 continue;
@@ -122,8 +122,8 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     }
 
     @SuppressWarnings("unchecked")
-    private synchronized Snapshot<K, V> createSnapshot() throws IOException {
-        Snapshot<K, V> s = new Snapshot<K, V>();
+    private synchronized StoreSnapshot<K, V> createSnapshot() throws IOException {
+        StoreSnapshot<K, V> s = new StoreSnapshot<K, V>();
         s.txId = txLog.getNextMessageId();
         s.maps = new HashMap<String, Map<K, V>>();
         for (Map.Entry<String, ConcurrentMap<K, V>> e : maps.entrySet()) {
@@ -142,7 +142,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
      * applied since the most recent snapshot was saved.
      */
     public void saveSnapshot() throws IOException {
-        Snapshot snapshot;
+        StoreSnapshot snapshot;
         long id;
         try {
             synchronized (this) {
@@ -158,7 +158,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
             boolean ok = false;
             FileOutputStream out = new FileOutputStream(f);
             try {
-                serializer.serialize(snapshot, out);
+                serializer.serialize(snapshot, true, out);
                 out.flush();
                 out.getChannel().force(true);
                 out.close();
@@ -205,7 +205,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     private synchronized Object exec(StoreTx<K, V> tx) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try {
-            serializer.serialize(tx, bos);
+            serializer.serialize(tx, false, bos);
         } catch (IOException e) {
             throw new KeyValueStoreException("Error serializing tx: " + e, e);
         }

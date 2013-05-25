@@ -27,7 +27,7 @@ class MapApiSpec extends Specification {
         if (dir.exists() && dir.isDirectory()) FileUtils.deleteDirectory(dir)
         store = new KeyValueStoreBuilder<Integer, ModelObject>()
                 .dir(dir)
-                .serializer(new JsonSerializer())
+                .alias("moo", ModelObject.class)
                 .versionProvider(new VersionProvider())
                 .listener(listener)
                 .create()

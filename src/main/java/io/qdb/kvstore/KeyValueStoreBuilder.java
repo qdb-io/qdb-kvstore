@@ -2,27 +2,30 @@ package io.qdb.kvstore;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * Helps create a DataStore instance. This makes it possible for the data store to receive all its configuration
- * in the constructor without breaking clients when new parameters are needed.
+ * in the constructor without breaking clients when new parameters are added.
  */
 public class KeyValueStoreBuilder<K, V> {
 
     private File dir;
-    private KeyValueStore.Serializer serializer;
+    private KeyValueStoreSerializer serializer;
     private KeyValueStore.VersionProvider<V> versionProvider;
     private KeyValueStore.Listener<K, V> listener;
     private int txLogSizeM = 10;
     private int maxObjectSize = 100000;
     private int snapshotCount = 3;
     private int snapshotIntervalSecs = 60;
+    private Map<String, Class> aliases = new HashMap<String, Class>();
 
     public KeyValueStoreBuilder() { }
 
     public KeyValueStore<K, V> create() throws IOException {
         if (dir == null) throw new IllegalStateException("dir is required");
-        if (serializer == null) throw new IllegalStateException("serializer is required");
+        if (serializer == null) serializer = new GensonSerializer(aliases);
         if (versionProvider == null) versionProvider = new NopVersionProvider<V>();
         return new KeyValueStoreImpl<K, V>(serializer, versionProvider, listener, dir,
                 txLogSizeM, maxObjectSize, snapshotCount, snapshotIntervalSecs);
@@ -45,10 +48,23 @@ public class KeyValueStoreBuilder<K, V> {
     }
 
     /**
-     * The serializer is responsible for converting objects to/from byte streams.
+     * The serializer is responsible for converting objects to/from byte streams. The default serializer stores
+     * data as JSON.
+     * @see #alias(String, Class)
      */
-    public KeyValueStoreBuilder serializer(KeyValueStore.Serializer serializer) {
+    public KeyValueStoreBuilder serializer(KeyValueStoreSerializer serializer) {
         this.serializer = serializer;
+        return this;
+    }
+
+    /**
+     * The default serializer includes the fully qualified name of each class in the JSON as a "@class" attribute.
+     * Use this method to change what is stored for your classes e.g. addAlias(Foo.class, "foo") will store Foo
+     * instances as "@class": "foo" instead of "@class": "com.acme.Foo". Note that if you supply your own serializer
+     * aliases are ignored.
+     */
+    public KeyValueStoreBuilder alias(String alias, Class<?> forClass) {
+        aliases.put(alias, forClass);
         return this;
     }
 
