@@ -2,8 +2,7 @@ qdb-kvstore
 ===========
 
 Transactional in memory key/value store. Writes the store to disk periodically in snapshot files. Uses a transaction
-log to replay from the last snapshot after a crash. Clustering is optional and all nodes in the cluster see the same
-view of the store.
+log to replay from the last snapshot after a crash.
 
 Fire's events when objects are created, updated or deleted.
 
@@ -17,7 +16,6 @@ Create a KeyValueStore using a KeyValueStoreBuilder:
 
     KeyValueStore<Integer, ModelObject> store = new KeyValueStoreBuilder<Integer, ModelObject>()
         .dir(dir)
-        .serializer(new JsonSerializer())
         .versionProvider(new VersionProvider())
         .listener(new ListenerImpl())
         .create();
@@ -29,9 +27,8 @@ Create a KeyValueStore using a KeyValueStoreBuilder:
 
 In this case the keys are Integer's and the values are ModelObject's.
 
-All parameters except dir and serializer are optional. The serializer is responsible for writing and reading objects
-to/from streams. The store keeps its snapshots and transaction log in dir. You need to supply a version provider
-if you want to use optimistic locking.
+All parameters except dir are optional. The store keeps its snapshots and transaction log in dir. You need to supply
+a version provider if you want to use optimistic locking.
 
 Once you have a store you can get named maps and use them as you would a normal java.util.ConcurrentMap. However
 all map methods might throw a KeyValueStoreException and all writes to the store are serialized. In addition if
