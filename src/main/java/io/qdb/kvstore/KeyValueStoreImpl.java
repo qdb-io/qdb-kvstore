@@ -193,10 +193,10 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     }
 
     /**
-     * Attempt to apply tx. It is proposed to the cluster (and hence written to the transaction log) and then applied
-     * to our maps. <b>This method must not be synchronized.</b>
+     * Attempt to apply tx. It is written to the transaction log and then applied to our maps.
      */
-    private synchronized Object exec(StoreTx<K, V> tx) {
+    @SuppressWarnings("unchecked")
+    private Object exec(StoreTx<K, V> tx) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try {
             serializer.serialize(tx, false, bos);
@@ -207,18 +207,19 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
 
         long timestamp = System.currentTimeMillis();
         boolean snapshotNow = false;
-        try {
-            long txId = txLog.append(timestamp, null, payload);
-            // the bytes calculation isn't perfectly accurate but good enough
-            long bytes = (txId + payload.length) - mostRecentSnapshotId;
-            snapshotNow = bytes > txLog.getMaxSize() / 2; // half our log space is gone so do a snapshot now
-        } catch (IOException e) {
-            throw new KeyValueStoreException("Error appending to tx log: " + e, e);
-        } finally {
-            scheduleSnapshot(snapshotNow);
+        synchronized (this) {
+            try {
+                long txId = txLog.append(timestamp, null, payload);
+                // the bytes calculation isn't perfectly accurate but good enough
+                long bytes = (txId + payload.length) - mostRecentSnapshotId;
+                snapshotNow = bytes > txLog.getMaxSize() / 2; // half our log space is gone so do a snapshot now
+            } catch (IOException e) {
+                throw new KeyValueStoreException("Error appending to tx log: " + e, e);
+            } finally {
+                scheduleSnapshot(snapshotNow);
+            }
+            return apply(tx);
         }
-
-        return apply(tx);
     }
 
     private synchronized void scheduleSnapshot(boolean asap) {
