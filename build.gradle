@@ -28,6 +28,9 @@ dependencies {
     groovy "org.codehaus.groovy:groovy-all:1.8.6"
 }
 
+project.sourceCompatibility = "1.6"
+project.targetCompatibility = "1.6"
+
 task sourceJar(type: Jar) {
     classifier = 'sources'
     from sourceSets.main.allSource
