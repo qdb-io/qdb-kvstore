@@ -75,17 +75,17 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
             break;
         }
 
-        if (mostRecentSnapshotId < txLog.getOldestMessageId()) {
+        if (mostRecentSnapshotId < txLog.getOldestId()) {
             throw new IOException("Most recent snapshot " + Long.toHexString(mostRecentSnapshotId) +
-                    " is older than oldest record in txlog " + Long.toHexString(txLog.getOldestMessageId()));
+                    " is older than oldest record in txlog " + Long.toHexString(txLog.getOldestId()));
         }
 
-        if (txLog.getNextMessageId() == 0 && mostRecentSnapshotId > 0) {
+        if (txLog.getNextId() == 0 && mostRecentSnapshotId > 0) {
             // probably this a recovery after a cluster failure by copying snapshot files around and nuking tx logs
             // to get everyone in sync
             log.info("The txlog is empty but we have snapshot " + Long.toHexString(mostRecentSnapshotId) +
                     " so using that as next id");
-            txLog.setFirstMessageId(mostRecentSnapshotId);
+            txLog.setFirstId(mostRecentSnapshotId);
         }
 
         if (snapshot != null) {
@@ -140,7 +140,7 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
                 if (busySavingSnapshot) return;
                 busySavingSnapshot = true;
                 txLog.sync();
-                id = txLog.getNextMessageId();
+                id = txLog.getNextId();
                 if (id == mostRecentSnapshotId) return; // nothing to do
                 snapshot = new HashMap<String, Map<K, V>>();
                 for (Map.Entry<String, ConcurrentMap<K, V>> e : maps.entrySet()) {

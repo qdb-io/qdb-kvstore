@@ -5,7 +5,7 @@ apply plugin: 'groovy'
 apply from: file("etc/emma.gradle")
 
 group = 'io.qdb'
-version = '0.1.0-SNAPSHOT'
+version = '0.1.1-SNAPSHOT'
 
 repositories {
     mavenCentral()
@@ -15,7 +15,7 @@ repositories {
 }
 
 dependencies {
-    compile 'io.qdb:qdb-buffer:0.3.0-SNAPSHOT'
+    compile 'io.qdb:qdb-buffer:0.4.0-SNAPSHOT'
     compile 'ch.qos.logback:logback-core:1.0.7'
     compile 'ch.qos.logback:logback-classic:1.0.7'
     compile 'org.slf4j:slf4j-api:1.6.6'
