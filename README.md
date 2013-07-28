@@ -47,6 +47,9 @@ it doesn't end up in the map. This is to prevent it from being in the map with a
 Changelog
 ---------
 
+0.1.2:
+- Added file locking so multiple JVMs won't use the same store directory
+
 0.1.1:
 - Upgraded to qdb-buffer 0.4.0
 

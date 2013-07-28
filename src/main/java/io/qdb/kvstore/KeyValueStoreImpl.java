@@ -7,6 +7,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.*;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -26,11 +28,13 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     private final int snapshotIntervalSecs;
     private final Timer snapshotTimer;
 
+    private FileOutputStream lockFile;
+    private FileLock lock;
     private MessageBuffer txLog;
     private long mostRecentSnapshotId;
     private boolean busySavingSnapshot;
     private boolean snapshotScheduled;
-    
+
     private final ConcurrentMap<String, ConcurrentMap<K, V>> maps = new ConcurrentHashMap<String, ConcurrentMap<K, V>>();
 
     @SuppressWarnings("unchecked")
@@ -45,6 +49,14 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
         this.snapshotIntervalSecs = snapshotIntervalSecs;
 
         dir = DirUtil.ensureDirectory(dir);
+
+        lockFile = new FileOutputStream(new File(dir, "lock"));
+        lockFile.write(0);
+        lock = lockFile.getChannel().tryLock();
+        if (lock == null) {
+            lockFile.close();
+            throw new DirLockedException(dir + " is in use");
+        }
 
         txLog = new PersistentMessageBuffer(DirUtil.ensureDirectory(new File(dir, "txlog")));
         txLog.setMaxSize(txLogSizeM * 1000000);
@@ -121,6 +133,8 @@ public class KeyValueStoreImpl<K, V> implements KeyValueStore<K, V> {
     public void close() throws IOException {
         snapshotTimer.cancel();
         txLog.close();
+        lock.release();
+        lockFile.close();
     }
 
     @Override
